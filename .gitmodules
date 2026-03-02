@@ -1,0 +1,9 @@
+[submodule "Vitruv-Change"]
+	path = Vitruv-Change
+	url = git@github.com:vitruv-tools/Vitruv-Change.git
+[submodule "Vitruv"]
+	path = Vitruv
+	url = git@github.com:vitruv-tools/Vitruv.git
+[submodule "Vitruv-DSLs"]
+	path = Vitruv-DSLs
+	url = git@github.com:vitruv-tools/Vitruv-DSLs.git
