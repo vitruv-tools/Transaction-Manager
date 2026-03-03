@@ -7,6 +7,3 @@
 [submodule "Vitruv-DSLs"]
 	path = Vitruv-DSLs
 	url = git@github.com:vitruv-tools/Vitruv-DSLs.git
-[submodule "Transaction-Manager"]
-	path = Transaction-Manager
-	url = git@github.com:vitruv-tools/Transaction-Manager.git
