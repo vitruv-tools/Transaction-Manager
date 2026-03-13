@@ -2,15 +2,19 @@
 	path = Vitruv-Change
 	url = git@github.com:vitruv-tools/Vitruv-Change.git
 	branch = main
+	update = merge
 [submodule "Vitruv"]
 	path = Vitruv
 	url = git@github.com:vitruv-tools/Vitruv.git
 	branch = main
+	update = merge
 [submodule "Vitruv-DSLs"]
 	path = Vitruv-DSLs
 	url = git@github.com:vitruv-tools/Vitruv-DSLs.git
 	branch = main
+	update = merge
 [submodule "emf-graph-gen"]
 	path = emf-graph-gen
 	url = git@github.com:bjthehun/emf-graph-gen.git
 	branch = main
+	update = merge
