@@ -1,5 +1,6 @@
 package tools.vitruv.transactions.management.locking;
 
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EStructuralFeature;
@@ -9,6 +10,7 @@ import org.eclipse.emf.ecore.EStructuralFeature;
  * in other words, an {@link EStructuralFeature}.
  * FeatureLocks are always exclusive locks.
  */
+@EqualsAndHashCode(callSuper = true)
 public class FeatureLock<Element> extends Lock<Element> {
     /**
      * The feature of {@code root} that needs to be locked.
@@ -25,5 +27,10 @@ public class FeatureLock<Element> extends Lock<Element> {
     public FeatureLock(Element root, EStructuralFeature feature) {
         super(root, LockMode.EXCLUSIVE);
         this.feature = feature;
+    }
+
+    @Override
+    public Lock<Element> convert(LockMode newMode) {
+        return new FeatureLock<>(this.root, this.feature);
     }
 }

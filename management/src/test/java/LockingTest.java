@@ -1,5 +1,4 @@
 import allElementTypes.AllElementTypesPackage;
-import allElementTypes.Identified;
 import allElementTypes.NonRoot;
 import allElementTypes.Root;
 import org.eclipse.emf.ecore.EAttribute;
@@ -177,10 +176,26 @@ public class LockingTest {
         transaction.setToRunning();
 
         for (int i = 0; i < changes.size(); i++) {
-            lockManager.acquireNextLockFor(transaction);
+            lockManager.computeNextLocksFor(transaction);
         }
         // All operations have been processed
         assertFalse(transaction.hasOperationsToExecute());
         transaction.setToCommited();
+    }
+
+    /**
+     * Checks the behavior of {@link LockMode}s and their strength.
+     */
+    @Test
+    void testLockModeBehavior() {
+        var lockModeX = LockMode.EXCLUSIVE;
+        var lockModeSIX = LockMode.SHARED_INTENSIONAL_EXCLUSIVE;
+        assertTrue(lockModeX.compareTo(lockModeSIX) > 0);
+        assertTrue(lockModeSIX.compareTo(lockModeX) < 0);
+
+        assertEquals(lockModeX, LockMode.highestLockMode(lockModeX, lockModeX));
+        assertEquals(lockModeX, LockMode.highestLockMode(lockModeX, lockModeSIX));
+        assertEquals(lockModeX, LockMode.highestLockMode(lockModeSIX, lockModeX));
+        assertEquals(lockModeSIX, LockMode.highestLockMode(lockModeSIX, lockModeSIX));
     }
 }

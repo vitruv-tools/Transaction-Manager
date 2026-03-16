@@ -28,7 +28,7 @@ public class Transaction<Element> {
     /**
      * Pointer to the next single operation.
      */
-    private ListIterator<EChange<Element>> operationIterator;
+    private final ListIterator<EChange<Element>> operationIterator;
     /**
      * Are we peeking for operations?
      */
