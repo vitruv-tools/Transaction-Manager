@@ -26,6 +26,10 @@
             <artifactId>tools.vitruv.change.atomic</artifactId>
         </dependency>
         <dependency>
+            <groupId>tools.vitruv</groupId>
+            <artifactId>tools.vitruv.change.composite</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <version>1.18.44</version>

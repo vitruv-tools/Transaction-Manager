@@ -1,0 +1,19 @@
+package tools.vitruv.transactions.management.locking;
+
+/**
+ * The current processing status of a {@link Transaction}.
+ */
+public enum TransactionStatus {
+    /**
+     * Transaction has started, but not yet begun to execute operations.
+     */
+    STARTED,
+    /**
+     * Transaction is currently executing operations.
+     */
+    RUNNING,
+    /**
+     * Transaction has executed all operations and commited.
+     */
+    COMMITED
+}
