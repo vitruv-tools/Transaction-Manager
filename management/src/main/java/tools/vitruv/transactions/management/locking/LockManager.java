@@ -10,8 +10,6 @@ import tools.vitruv.change.atomic.feature.reference.InsertEReference;
 import tools.vitruv.change.atomic.feature.reference.RemoveEReference;
 import tools.vitruv.change.composite.description.VitruviusChange;
 
-import javax.lang.model.element.Element;
-
 import static com.google.common.base.Preconditions.checkArgument;
 
 /**
@@ -57,14 +55,83 @@ public class LockManager<E> {
     }
 
     /**
-     * Attempts to acquire {@code lock} for {@code transaction}.
+     * Attempts to acquire all locks that the next {@link EChange} of {@code transaction} requires.
+     * If the lock request fails, returns a mapping of:
+     * <ol>
+     *  <li>the lock that cannot be acquired,</li>
+     *  <li>the other transactions blocking {@code transaction}.</li>
+     * </ol>
+     * 
+     * @param transaction - {@link Transaction}
+     * @return {@link Optional}
+     */
+    public Optional<Set<Transaction<E>>> acquireLocksForNextOperation(Transaction<E> transaction) {
+        checkArgument(locksForTransactions.containsKey(transaction), "This transaction may not acquire locks!");
+        // Peek operation
+        var operation = transaction.peekNextOperation();
+        // Compute locks
+        var locksToAcquire = computeLocksFor(operation);
+
+        // Identify all blocking transactions.
+        for (var lock: locksToAcquire) {
+            var blockingTransactions = testLock(lock, transaction);
+            if (blockingTransactions.isPresent()) {
+                // Mark transaction as blocked
+                transaction.setToBlocked();
+                return blockingTransactions;
+            }
+        }
+        // Else, transaction succeeds
+        for (var lock: locksToAcquire) {
+            setLock(lock, transaction);
+        }
+        transaction.acceptNextOperation();
+        return Optional.empty();
+    }
+
+    /**
+     * Acquires {@code lock} for {@link Transaction}
      *
      * @param lockToAcquire - {@link Lock}
      * @param transaction -  {@link Transaction}
      * @return {@link Optional}
      *  The Optional type holds another transaction that already has the lock, and prevents its acquisition.
      */
-    public Optional<Set<Transaction<E>>> acquireLock(Lock<E> lockToAcquire, Transaction<E> transaction) {
+    public Optional<Set<Transaction<E>>> testLock(Lock<E> lockToAcquire, Transaction<E> transaction) {
+        var lockingTransactions = lockHolders.get(lockToAcquire);
+        // If no other transaction holds the lock, the request succeeds.
+        if (lockingTransactions == null) {
+            return Optional.empty();
+        }
+
+        // If only the current transaction holds the lock, the request also succeeds.
+        // Convert the lock, if required.
+        if (lockingTransactions.size() == 1 && lockingTransactions.contains(transaction)) {
+            return Optional.empty();
+        }
+
+        // If more than one transaction holds the lock in SIX mode, and the current transaction also
+        // is in SIX mode, the request succeeds, and transaction also becomes a lock holder.
+        // If more than one transaction holds it, this is an indicator thereof.
+        if (lockToAcquire.mode == LockMode.SHARED_INTENSIONAL_EXCLUSIVE &&
+            lockMode.get(lockToAcquire) == LockMode.SHARED_INTENSIONAL_EXCLUSIVE) {
+            return Optional.empty();
+        }
+
+        // Return all locking transactions.
+        return Optional.of(lockingTransactions);
+    }
+
+
+    /**
+     * Actually acquires {@code lock} for {@code transaction} and updates information in this lock manager.
+     *
+     * @param lockToAcquire - {@link Lock}
+     * @param transaction -  {@link Transaction}
+     * @return {@link Optional}
+     *  The Optional type holds another transaction that already has the lock, and prevents its acquisition.
+     */
+    public void setLock(Lock<E> lockToAcquire, Transaction<E> transaction) {
         checkArgument(locksForTransactions.containsKey(transaction), "This transaction may not acquire locks!");
 
         var lockingTransactions = lockHolders.get(lockToAcquire);
@@ -75,8 +142,7 @@ public class LockManager<E> {
             lockHolders.put(lockToAcquire, newHolders);
             locksForTransactions.get(transaction).add(lockToAcquire);
             lockMode.put(lockToAcquire, lockToAcquire.mode);
-
-            return Optional.empty();
+            return;
         }
 
         // If only the current transaction holds the lock, the request also succeeds.
@@ -89,8 +155,7 @@ public class LockManager<E> {
             lockMode.put(upgradedLock, newLockMode);
             lockHolders.put(upgradedLock, lockingTransactions);
             locksForTransactions.get(transaction).add(lockToAcquire);
-
-            return Optional.empty();
+            return;
         }
         
         // If more than one transaction holds the lock in SIX mode, and the current transaction also
@@ -100,11 +165,7 @@ public class LockManager<E> {
             lockMode.get(lockToAcquire) == LockMode.SHARED_INTENSIONAL_EXCLUSIVE) {
             lockingTransactions.add(transaction);
             locksForTransactions.get(transaction).add(lockToAcquire);
-            return Optional.empty();
         }
-
-        // Return all locking transactions.
-        return Optional.of(lockingTransactions);
     }
 
     /**

@@ -32,8 +32,12 @@ public class LockingTest {
     public static final TypeInferringAtomicEChangeFactory E_CHANGE_FACTORY = TypeInferringAtomicEChangeFactory.getInstance();
     public static final EAttribute ROOT_INTEGER_E_ATTRIBUTE = AllElementTypesPackage.eINSTANCE
         .getRoot_SingleValuedEAttribute();
+    public static final EAttribute ROOT_INTEGER_E_ATTRIBUTE_2 = AllElementTypesPackage.eINSTANCE
+        .getRoot_SingleValuedPrimitiveTypeEAttribute();
     public static final EReference ROOT_NON_ROOT_E_REFERENCE = AllElementTypesPackage.eINSTANCE
         .getRoot_MultiValuedNonContainmentEReference();
+    public static final EReference ROOT_NON_ROOT_E_REFERENCE_2 = AllElementTypesPackage.eINSTANCE
+        .getRoot_MultiValuedUnorderedNonContainmentEReference();
     public static final NonRoot NON_ROOT = AllElementTypesCreators.aet.NonRoot();
 
     private LockManager<EObject> lockManager;
@@ -50,7 +54,7 @@ public class LockingTest {
     @Test
     void testCorrectComputationOfLocks() {
         // CreateEChange
-        var createRootChange = getCreateEObjectChange();
+        var createRootChange = getCreateRootEObjectChange();
         var locksForCreateRootChange = lockManager.computeLocksFor(createRootChange);
         assertEquals(1, locksForCreateRootChange.size());
         var createLock = (ElementLock<EObject>) locksForCreateRootChange.get(0);
@@ -58,7 +62,7 @@ public class LockingTest {
         assertEquals(LockMode.EXCLUSIVE, createLock.getMode());
 
         // DeleteEChange
-        var deleteRootChange = getDeleteEObjectChange();
+        var deleteRootChange = getDeleteRootEObjectChange();
         var locksForDeleteRootChange = lockManager.computeLocksFor(deleteRootChange);
 
         assertEquals(1, locksForDeleteRootChange.size());
@@ -67,7 +71,7 @@ public class LockingTest {
         assertEquals(LockMode.EXCLUSIVE, deleteLock.getMode());
 
         // ReplaceEAttributeEChange
-        var setRootEAttributeChange = getRootIntegerReplaceSingleValuedEAttribute();
+        var setRootEAttributeChange = getRootIntegerReplaceSingleValuedEAttributeChange();
         var locksForReplaceAttributeChange = lockManager.computeLocksFor(setRootEAttributeChange);
         assertEquals(2, locksForReplaceAttributeChange.size());
         var lockOnRoot = (ElementLock<EObject>) locksForReplaceAttributeChange.get(0);
@@ -79,7 +83,7 @@ public class LockingTest {
         assertEquals(ROOT_INTEGER_E_ATTRIBUTE, lockOnAttribute.getFeature());
 
         // InsertReferenceEChange
-        var insertRootEReferenceChange = getInsertReferenceChange();
+        var insertRootEReferenceChange = getIdentifiedInsertReferenceChange();
 
         var locksForInsertReferenceChange = lockManager.computeLocksFor(insertRootEReferenceChange);
         assertEquals(3, locksForInsertReferenceChange.size());
@@ -95,7 +99,7 @@ public class LockingTest {
         assertEquals(ROOT_NON_ROOT_E_REFERENCE, lockOnReferenceInsert.getFeature());
 
         // RemoveReferenceEChange
-        var removeRootEReferenceChange = getIdentifiedRemoveEReference();
+        var removeRootEReferenceChange = getIdentifiedRemoveEReferenceChange();
 
         var locksForRemoveReferenceChange = lockManager.computeLocksFor(removeRootEReferenceChange);
         assertEquals(3, locksForRemoveReferenceChange.size());
@@ -111,7 +115,7 @@ public class LockingTest {
         assertEquals(ROOT_NON_ROOT_E_REFERENCE, lockOnReferenceRemove.getFeature());
     }
 
-    private static InsertEReference<EObject> getInsertReferenceChange() {
+    private static InsertEReference<EObject> getIdentifiedInsertReferenceChange() {
         return E_CHANGE_FACTORY.createInsertReferenceChange(
             ROOT,
             ROOT_NON_ROOT_E_REFERENCE,
@@ -120,7 +124,7 @@ public class LockingTest {
         );
     }
 
-    private static ReplaceSingleValuedEAttribute<EObject, Integer> getRootIntegerReplaceSingleValuedEAttribute() {
+    private static ReplaceSingleValuedEAttribute<EObject, Integer> getRootIntegerReplaceSingleValuedEAttributeChange() {
         return E_CHANGE_FACTORY.createReplaceSingleAttributeChange(
             ROOT,
             ROOT_INTEGER_E_ATTRIBUTE,
@@ -129,17 +133,17 @@ public class LockingTest {
         );
     }
 
-    private static CreateEObject<EObject> getCreateEObjectChange() {
+    private static CreateEObject<EObject> getCreateRootEObjectChange() {
         return E_CHANGE_FACTORY
             .createCreateEObjectChange(ROOT);
     }
 
-    private static DeleteEObject<EObject> getDeleteEObjectChange() {
+    private static DeleteEObject<EObject> getDeleteRootEObjectChange() {
         return E_CHANGE_FACTORY
             .createDeleteEObjectChange(ROOT);
     }
 
-    private static RemoveEReference<EObject> getIdentifiedRemoveEReference() {
+    private static RemoveEReference<EObject> getIdentifiedRemoveEReferenceChange() {
         return E_CHANGE_FACTORY.createRemoveReferenceChange(
             ROOT,
             ROOT_NON_ROOT_E_REFERENCE,
@@ -168,10 +172,10 @@ public class LockingTest {
     @Test
     void testLifecycleOfOneTransaction() {
         List<? extends EChange<EObject>> changes = List.of(
-            getRootIntegerReplaceSingleValuedEAttribute(),
-            getInsertReferenceChange(),
-            getIdentifiedRemoveEReference(),
-            getDeleteEObjectChange()
+            getRootIntegerReplaceSingleValuedEAttributeChange(),
+            getIdentifiedInsertReferenceChange(),
+            getIdentifiedRemoveEReferenceChange(),
+            getDeleteRootEObjectChange()
         );
         var vitruviusChange = new TransactionalChangeImpl<>(changes);
         var lockManager = new LockManager<EObject>();
@@ -184,12 +188,7 @@ public class LockingTest {
         transaction.setToRunning();
 
         for (int i = 0; i < changes.size(); i++) {
-            var locks = lockManager.computeNextLocksFor(transaction);
-            transaction.acceptNextOperation();
-            for (var lock: locks) {
-                var blockingTransactions = lockManager.acquireLock(lock, transaction);
-                assertTrue(blockingTransactions.isEmpty());
-            }
+            lockManager.acquireLocksForNextOperation(transaction);
         }
         // All operations have been processed
         assertFalse(transaction.hasOperationsToExecute());
@@ -204,13 +203,114 @@ public class LockingTest {
     }
 
     @Test
-    void testTwoTransactionsWithoutLockConflicts() {
-
+    void testsForNoLockConflicts() {
+        assertLockCompatibility(
+            getIdentifiedInsertReferenceChange(),
+            getRootIntegerReplaceSingleValuedEAttributeChange()
+        );
+        assertLockCompatibility(
+            getRootIntegerReplaceSingleValuedEAttributeChange(),
+            getIdentifiedRemoveEReferenceChange()
+        );
+        assertLockCompatibility(
+            getCreateRootEObjectChange(),
+            E_CHANGE_FACTORY.createDeleteEObjectChange(NON_ROOT)
+        );
+        assertLockCompatibility(
+            getDeleteRootEObjectChange(),
+            E_CHANGE_FACTORY.createCreateEObjectChange(NON_ROOT)
+        );
+        assertLockCompatibility(
+            getRootIntegerReplaceSingleValuedEAttributeChange(),
+            E_CHANGE_FACTORY.createReplaceSingleAttributeChange(
+                ROOT,
+                ROOT_INTEGER_E_ATTRIBUTE_2,
+                0,
+                6477
+            )
+        );
+        assertLockCompatibility(
+            getIdentifiedInsertReferenceChange(),
+            E_CHANGE_FACTORY.createRemoveReferenceChange(
+                ROOT,
+                ROOT_NON_ROOT_E_REFERENCE_2,
+                NON_ROOT,
+                0
+            )
+        );
+        assertLockCompatibility(
+            getIdentifiedInsertReferenceChange(),
+            E_CHANGE_FACTORY.createDeleteEObjectChange(
+                AllElementTypesCreators.aet.ValueBased()
+            )
+        );
     }
 
     @Test
-    void testTwoTransactionsWithLockConflicts() {
+    void testsForLockConflicts() {
+        assertLockConflict(
+            getIdentifiedRemoveEReferenceChange(),
+            getIdentifiedInsertReferenceChange()
+        );
+        assertLockConflict(
+            getRootIntegerReplaceSingleValuedEAttributeChange(),
+            getDeleteRootEObjectChange()
+        );
+        assertLockConflict(
+            getIdentifiedInsertReferenceChange(),
+            getIdentifiedRemoveEReferenceChange()
+        );
+        assertLockConflict(
+            getDeleteRootEObjectChange(),
+            getIdentifiedRemoveEReferenceChange()
+        );
+    }
 
+    void assertLockConflict(EChange<EObject> change1, EChange<EObject> change2) {
+        setup();
+        // Create two transactions
+        var transaction1 = lockManager.submitTransaction(
+            new TransactionalChangeImpl<>(List.of(change1))
+        );
+        var transaction2 = lockManager.submitTransaction(
+            new TransactionalChangeImpl<>(List.of(change2))
+        );
+        // Run
+        transaction1.setToRunning();
+        transaction2.setToRunning();
+        // Run op1 of Transaction 1
+        assertTrue(lockManager.acquireLocksForNextOperation(transaction1).isEmpty());
+        // Run op2 of Transaction 2, Transaction 1 causes conflict
+        var blockingTransactions = lockManager.acquireLocksForNextOperation(transaction2);
+        assertTrue(blockingTransactions.isPresent());
+        assertEquals(1, blockingTransactions.get().size());
+        assertEquals(transaction1, blockingTransactions.get().toArray()[0]);
+
+        // Assert op2 does not hold locks afterward
+        assertTrue(lockManager.getLocksHeldBy(transaction2).isEmpty());
+    }
+
+    void assertLockCompatibility(EChange<EObject> change1, EChange<EObject> change2) {
+        setup();
+        // Create two transactions
+        var transaction1 = lockManager.submitTransaction(
+            new TransactionalChangeImpl<>(List.of(change1))
+        );
+        var transaction2 = lockManager.submitTransaction(
+            new TransactionalChangeImpl<>(List.of(change2))
+        );
+        transaction1.setToRunning();
+        transaction2.setToRunning();
+        // Run op1 of Transaction 1
+        assertTrue(lockManager.acquireLocksForNextOperation(transaction1).isEmpty());
+        // Run op2 of Transaction 2, expect no conflict
+        var blockingTransactions = lockManager.acquireLocksForNextOperation(transaction2);
+        assertTrue(blockingTransactions.isEmpty());
+        // Assert Transaction 2 holds its requested locks
+        assertEquals(
+            lockManager.getLocksHeldBy(transaction2),
+            new HashSet<>(lockManager.computeLocksFor(change2))
+        );
     }
 
     @Test
@@ -218,15 +318,15 @@ public class LockingTest {
         var transaction1 = lockManager.submitTransaction(
             new TransactionalChangeImpl<>(
                 List.of(
-                    getRootIntegerReplaceSingleValuedEAttribute(),
-                    getDeleteEObjectChange()
+                    getRootIntegerReplaceSingleValuedEAttributeChange(),
+                    getDeleteRootEObjectChange()
                 )
             )
         );
         var transaction2 = lockManager.submitTransaction(
             new TransactionalChangeImpl<>(
                 List.of(
-                    getInsertReferenceChange()
+                    getIdentifiedInsertReferenceChange()
                 )
             )
         );
@@ -235,7 +335,7 @@ public class LockingTest {
         transaction1.setToRunning();
         var locks = lockManager.computeNextLocksFor(transaction1);
         transaction1.acceptNextOperation();
-        locks.forEach(lock -> lockManager.acquireLock(lock, transaction1));
+        locks.forEach(lock -> lockManager.setLock(lock, transaction1));
 
         assertEquals(2, locks.size());
         assertLock(locks, ROOT, LockMode.SHARED_INTENSIONAL_EXCLUSIVE, null);
@@ -245,7 +345,7 @@ public class LockingTest {
         // T1 -> second operation, X locks on ROOT and on EAttribute
         var locksOp2 = lockManager.computeNextLocksFor(transaction1);
         transaction1.acceptNextOperation();
-        locksOp2.forEach(lock -> lockManager.acquireLock(lock, transaction1));
+        locksOp2.forEach(lock -> lockManager.setLock(lock, transaction1));
         var locksOfT1 = lockManager.getLocksHeldBy(transaction1);
         assertEquals(2, locksOfT1.size());
         assertLock(locksOfT1, ROOT, LockMode.EXCLUSIVE, null);
@@ -254,23 +354,23 @@ public class LockingTest {
         // T2 -> first operation, only second lock request should succeed
         transaction2.setToRunning();
         var locksT2Op1 = lockManager.computeNextLocksFor(transaction2);
-        var conflicts = lockManager.acquireLock(locksT2Op1.get(0), transaction2);
+        var conflicts = lockManager.testLock(locksT2Op1.get(0), transaction2);
         assertTrue(conflicts.isPresent());
         assertEquals(transaction1, conflicts.get().toArray()[0]);
         // Lock 2
-        assertFalse(lockManager.acquireLock(locksT2Op1.get(1), transaction2).isPresent());
+        assertFalse(lockManager.testLock(locksT2Op1.get(1), transaction2).isPresent());
         // Lock 3
-        conflicts = lockManager.acquireLock(locksT2Op1.get(2), transaction2);
+        conflicts = lockManager.testLock(locksT2Op1.get(2), transaction2);
         assertFalse(conflicts.isPresent());
     }
 
     @Test
     void testTransactionCorrectBehavior() {
         List<? extends EChange<EObject>> changes = List.of(
-            getRootIntegerReplaceSingleValuedEAttribute(),
-            getInsertReferenceChange(),
-            getIdentifiedRemoveEReference(),
-            getDeleteEObjectChange()
+            getRootIntegerReplaceSingleValuedEAttributeChange(),
+            getIdentifiedInsertReferenceChange(),
+            getIdentifiedRemoveEReferenceChange(),
+            getDeleteRootEObjectChange()
         );
         var vitruviusChange = new TransactionalChangeImpl<>(changes);
 
@@ -283,9 +383,8 @@ public class LockingTest {
         // Transaction cannot be commited or set to running
         assertThrows(IllegalStateException.class, transaction::setToRunning);
         assertThrows(IllegalStateException.class, transaction::setToCommited);
-        // Peek operation, then do not allow double peek
-        transaction.peekNextOperation();
-        assertThrows(IllegalStateException.class, transaction::peekNextOperation);
+        // Peek operation, allow double peek
+        assertEquals(transaction.peekNextOperation(), transaction.peekNextOperation());
     }
 
     /**

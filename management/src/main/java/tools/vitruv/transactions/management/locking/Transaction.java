@@ -30,9 +30,9 @@ public class Transaction<Element> {
      */
     private final ListIterator<EChange<Element>> operationIterator;
     /**
-     * Are we peeking for operations?
+     * Operation that we are currently peeking.
      */
-    private boolean isPeeking = false;
+    private EChange<Element> peeking = null;
 
     /**
      * Creates a new transaction.
@@ -50,8 +50,15 @@ public class Transaction<Element> {
      * Sets a {@code STARTED} transaction to {@code RUNNING}.
      */
     public void setToRunning() {
-        checkState(status == TransactionStatus.STARTED, "Can only set a started transaction to running!");
+        checkState(status == TransactionStatus.STARTED
+            || status == TransactionStatus.BLOCKED,
+            "Can only set a started or blocked transaction to running!");
         status = TransactionStatus.RUNNING;
+    }
+
+    public void setToBlocked() {
+        checkState(status == TransactionStatus.RUNNING, "Can only set a running transaction to blocked!");
+        status = TransactionStatus.BLOCKED;
     }
 
     /**
@@ -70,7 +77,7 @@ public class Transaction<Element> {
      * @return boolean
      */
     public boolean hasOperationsToExecute() {
-        return isPeeking || operationIterator.hasNext();
+        return peeking != null || operationIterator.hasNext();
     }
 
     /**
@@ -84,16 +91,19 @@ public class Transaction<Element> {
     public EChange<Element> peekNextOperation() {
         checkState(status == TransactionStatus.RUNNING, "Cannot peek operations for transactions that do not run!");
         checkState(operationIterator.hasNext(), "This transaction has no operation to execute!");
-        checkState(!isPeeking, "We are currently peeking for the next operation!");
-        isPeeking = true;
-        return operationIterator.next();
+
+        if (peeking == null) {
+            peeking = operationIterator.next();
+        }
+        return peeking;
     }
 
     /**
      * Accepts the next operation when in peeking mode, because the tests for it have succeeded.
      */
     public void acceptNextOperation() {
-        checkState(isPeeking, "We are not peeking for some operation!");
-        isPeeking = false;
+        checkState(status == TransactionStatus.RUNNING, "Can only advance a running transaction!");
+        checkState(peeking != null, "We are not peeking for some operation!");
+        peeking = null;
     }
 }
