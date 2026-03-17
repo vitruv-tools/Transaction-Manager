@@ -82,6 +82,7 @@ public class Transaction<Element> {
      * @throws IllegalStateException
      */
     public EChange<Element> peekNextOperation() {
+        checkState(status == TransactionStatus.RUNNING, "Cannot peek operations for transactions that do not run!");
         checkState(operationIterator.hasNext(), "This transaction has no operation to execute!");
         checkState(!isPeeking, "We are currently peeking for the next operation!");
         isPeeking = true;

@@ -13,6 +13,10 @@ public enum TransactionStatus {
      */
     RUNNING,
     /**
+     * Transaction has been blocked due to another transaction.
+     */
+    BLOCKED,
+    /**
      * Transaction has executed all operations and commited.
      */
     COMMITED

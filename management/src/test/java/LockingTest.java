@@ -4,6 +4,8 @@ import allElementTypes.Root;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EReference;
+import org.eclipse.emf.ecore.EStructuralFeature;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import tools.vitruv.change.atomic.EChange;
@@ -17,6 +19,8 @@ import tools.vitruv.change.composite.description.impl.TransactionalChangeImpl;
 import tools.vitruv.change.testutils.metamodels.AllElementTypesCreators;
 import tools.vitruv.transactions.management.locking.*;
 
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -32,14 +36,19 @@ public class LockingTest {
         .getRoot_MultiValuedNonContainmentEReference();
     public static final NonRoot NON_ROOT = AllElementTypesCreators.aet.NonRoot();
 
+    private LockManager<EObject> lockManager;
+
+    @BeforeEach
+    void setup() {
+        lockManager = new LockManager<>();
+    }
+
     /**
      * Tests that a {@link LockManager} determines the required {@link Lock}s for given
      * types of {@link EChange}.
      */
     @Test
     void testCorrectComputationOfLocks() {
-        var lockManager = new LockManager<EObject>();
-
         // CreateEChange
         var createRootChange = getCreateEObjectChange();
         var locksForCreateRootChange = lockManager.computeLocksFor(createRootChange);
@@ -144,8 +153,7 @@ public class LockingTest {
      */
     @Test
     void testEmptyTransactionsDoNotWork() {
-        var lockManager = new LockManager<Object>();
-        var emptyVitruviusChange = new TransactionalChangeImpl<>(
+        var emptyVitruviusChange = new TransactionalChangeImpl<EObject>(
             List.of()
         );
         assertThrows(IllegalStateException.class, () -> lockManager.submitTransaction(emptyVitruviusChange));
@@ -176,11 +184,108 @@ public class LockingTest {
         transaction.setToRunning();
 
         for (int i = 0; i < changes.size(); i++) {
-            lockManager.computeNextLocksFor(transaction);
+            var locks = lockManager.computeNextLocksFor(transaction);
+            transaction.acceptNextOperation();
+            for (var lock: locks) {
+                var blockingTransactions = lockManager.acquireLock(lock, transaction);
+                assertTrue(blockingTransactions.isEmpty());
+            }
         }
         // All operations have been processed
         assertFalse(transaction.hasOperationsToExecute());
+
+        // Check locks
+        var locksHeldByTransaction = lockManager.getLocksHeldBy(transaction);
+        assertLock(locksHeldByTransaction, ROOT, LockMode.EXCLUSIVE, null);
+        assertLock(locksHeldByTransaction, NON_ROOT, LockMode.SHARED_INTENSIONAL_EXCLUSIVE, null);
+        assertLock(locksHeldByTransaction, ROOT, LockMode.EXCLUSIVE, ROOT_INTEGER_E_ATTRIBUTE);
+        assertLock(locksHeldByTransaction, ROOT, LockMode.EXCLUSIVE, ROOT_NON_ROOT_E_REFERENCE);
         transaction.setToCommited();
+    }
+
+    @Test
+    void testTwoTransactionsWithoutLockConflicts() {
+
+    }
+
+    @Test
+    void testTwoTransactionsWithLockConflicts() {
+
+    }
+
+    @Test
+    void testLockUpgrade() {
+        var transaction1 = lockManager.submitTransaction(
+            new TransactionalChangeImpl<>(
+                List.of(
+                    getRootIntegerReplaceSingleValuedEAttribute(),
+                    getDeleteEObjectChange()
+                )
+            )
+        );
+        var transaction2 = lockManager.submitTransaction(
+            new TransactionalChangeImpl<>(
+                List.of(
+                    getInsertReferenceChange()
+                )
+            )
+        );
+
+        // T1 -> first operation, SIX lock on ROOT and X lock on integer EAttribute
+        transaction1.setToRunning();
+        var locks = lockManager.computeNextLocksFor(transaction1);
+        transaction1.acceptNextOperation();
+        locks.forEach(lock -> lockManager.acquireLock(lock, transaction1));
+
+        assertEquals(2, locks.size());
+        assertLock(locks, ROOT, LockMode.SHARED_INTENSIONAL_EXCLUSIVE, null);
+        assertLock(locks, ROOT, LockMode.EXCLUSIVE, ROOT_INTEGER_E_ATTRIBUTE);
+        assertEquals(new HashSet<>(locks), lockManager.getLocksHeldBy(transaction1));
+
+        // T1 -> second operation, X locks on ROOT and on EAttribute
+        var locksOp2 = lockManager.computeNextLocksFor(transaction1);
+        transaction1.acceptNextOperation();
+        locksOp2.forEach(lock -> lockManager.acquireLock(lock, transaction1));
+        var locksOfT1 = lockManager.getLocksHeldBy(transaction1);
+        assertEquals(2, locksOfT1.size());
+        assertLock(locksOfT1, ROOT, LockMode.EXCLUSIVE, null);
+        assertLock(locksOfT1, ROOT, LockMode.EXCLUSIVE, ROOT_INTEGER_E_ATTRIBUTE);
+
+        // T2 -> first operation, only second lock request should succeed
+        transaction2.setToRunning();
+        var locksT2Op1 = lockManager.computeNextLocksFor(transaction2);
+        var conflicts = lockManager.acquireLock(locksT2Op1.get(0), transaction2);
+        assertTrue(conflicts.isPresent());
+        assertEquals(transaction1, conflicts.get().toArray()[0]);
+        // Lock 2
+        assertFalse(lockManager.acquireLock(locksT2Op1.get(1), transaction2).isPresent());
+        // Lock 3
+        conflicts = lockManager.acquireLock(locksT2Op1.get(2), transaction2);
+        assertFalse(conflicts.isPresent());
+    }
+
+    @Test
+    void testTransactionCorrectBehavior() {
+        List<? extends EChange<EObject>> changes = List.of(
+            getRootIntegerReplaceSingleValuedEAttribute(),
+            getInsertReferenceChange(),
+            getIdentifiedRemoveEReference(),
+            getDeleteEObjectChange()
+        );
+        var vitruviusChange = new TransactionalChangeImpl<>(changes);
+
+        var transaction = lockManager.submitTransaction(vitruviusChange);
+        // Started transactions cannot return operations, only running ones
+        assertThrows(IllegalStateException.class, transaction::peekNextOperation);
+
+        // Set transaction to running
+        transaction.setToRunning();
+        // Transaction cannot be commited or set to running
+        assertThrows(IllegalStateException.class, transaction::setToRunning);
+        assertThrows(IllegalStateException.class, transaction::setToCommited);
+        // Peek operation, then do not allow double peek
+        transaction.peekNextOperation();
+        assertThrows(IllegalStateException.class, transaction::peekNextOperation);
     }
 
     /**
@@ -197,5 +302,22 @@ public class LockingTest {
         assertEquals(lockModeX, LockMode.highestLockMode(lockModeX, lockModeSIX));
         assertEquals(lockModeX, LockMode.highestLockMode(lockModeSIX, lockModeX));
         assertEquals(lockModeSIX, LockMode.highestLockMode(lockModeSIX, lockModeSIX));
+    }
+
+    /**
+     * Test that some locks exist in {@code heldLocks}.
+     */
+    <E> void assertLock(Collection<Lock<E>> heldLocks,
+                        E element, LockMode mode, EStructuralFeature feature) {
+        assertTrue(heldLocks.stream()
+            .filter(lock -> lock.getMode().equals(mode) && lock.getRoot() == element)
+            .anyMatch(lock -> {
+                if (feature != null && lock instanceof FeatureLock<E> featureLock) {
+                    return featureLock.getFeature().equals(feature);
+                }
+                else {
+                    return true;
+                }
+            }));
     }
 }
