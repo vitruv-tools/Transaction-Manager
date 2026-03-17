@@ -22,6 +22,7 @@
 
 
   <properties>
+    <vitruv.version>3.2.4-SNAPSHOT</vitruv.version>
     <maven.compiler.release>21</maven.compiler.release>
     <maven.compiler.source>21</maven.compiler.source>
     <maven.compiler.target>21</maven.compiler.target>
@@ -98,7 +99,12 @@
       <dependency>
         <groupId>tools.vitruv</groupId>
         <artifactId>tools.vitruv.change.atomic</artifactId>
-        <version>3.2.4-SNAPSHOT</version>
+        <version>${vitruv.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>tools.vitruv</groupId>
+        <artifactId>tools.vitruv.change.composite</artifactId>
+        <version>${vitruv.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
