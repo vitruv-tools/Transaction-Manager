@@ -42,7 +42,7 @@ public class LockManager<E> {
      *
      * @param change - {@link VitruviusChange}
      */
-    public Transaction<E> submitTransaction(VitruviusChange<E> change) {
+    public synchronized Transaction<E> submitTransaction(VitruviusChange<E> change) {
         var newTransaction = new Transaction<>(change);
         locksForTransactions.put(newTransaction, new HashSet<>());
         unlocking.put(newTransaction, false);
@@ -55,7 +55,7 @@ public class LockManager<E> {
      * @param transaction - {@link Transaction}
      * @return {@link Set}
      */
-    public Set<Lock<E>> getLocksHeldBy(Transaction<E> transaction) {
+    public synchronized Set<Lock<E>> getLocksHeldBy(Transaction<E> transaction) {
         checkArgument(locksForTransactions.containsKey(transaction), "The transaction is not currently active!");
         return Set.copyOf(locksForTransactions.get(transaction));
     }
@@ -71,7 +71,7 @@ public class LockManager<E> {
      * @param transaction - {@link Transaction}
      * @return {@link Optional}
      */
-    public Optional<Set<Transaction<E>>> acquireLocksForNextOperation(Transaction<E> transaction) {
+    public synchronized Optional<Set<Transaction<E>>> acquireLocksForNextOperation(Transaction<E> transaction) {
         checkArgument(locksForTransactions.containsKey(transaction), "Transactions is not being processed!");
         checkArgument(unlocking.get(transaction) == false, "Transaction has started to unlock; it must not acquire further locks!");
         checkArgument(transaction.getStatus() == TransactionStatus.RUNNING, "Cannot acquire locks if the transaction is not running!");
@@ -105,7 +105,7 @@ public class LockManager<E> {
      * @return {@link Optional}
      *  The Optional type holds another transaction that already has the lock, and prevents its acquisition.
      */
-    public Optional<Set<Transaction<E>>> testLock(Lock<E> lockToAcquire, Transaction<E> transaction) {
+    public synchronized Optional<Set<Transaction<E>>> testLock(Lock<E> lockToAcquire, Transaction<E> transaction) {
         var lockingTransactions = lockHolders.get(lockToAcquire);
         // If no other transaction holds the lock, the request succeeds.
         if (lockingTransactions == null) {
@@ -139,7 +139,7 @@ public class LockManager<E> {
      * @return {@link Optional}
      *  The Optional type holds another transaction that already has the lock, and prevents its acquisition.
      */
-    public void setLock(Lock<E> lockToAcquire, Transaction<E> transaction) {
+    public synchronized void setLock(Lock<E> lockToAcquire, Transaction<E> transaction) {
         checkArgument(locksForTransactions.containsKey(transaction), "This transaction may not acquire locks!");
 
         var lockingTransactions = lockHolders.get(lockToAcquire);
@@ -182,7 +182,7 @@ public class LockManager<E> {
      * @param lock - {@link Lock}
      * @param lockHolder - {@link Transaction}
      */
-    public void unsetLock(Lock<E> lock, Transaction<E> lockHolder) {
+    public synchronized void unsetLock(Lock<E> lock, Transaction<E> lockHolder) {
         // Transaction must be registered
         checkArgument(locksForTransactions.containsKey(lockHolder), "Transaction is not currently active!");
         var locks = locksForTransactions.get(lockHolder);
