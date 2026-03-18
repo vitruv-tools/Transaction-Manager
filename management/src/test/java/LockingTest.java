@@ -266,6 +266,52 @@ public class LockingTest {
         );
     }
 
+    @Test
+    void testSingleTransactionUnlocking() {
+        // Create transaction, with two operations
+        var transaction1 = lockManager.submitTransaction(
+            new TransactionalChangeImpl<>(
+                List.of(getIdentifiedInsertReferenceChange(), getDeleteRootEObjectChange())
+            )
+        );
+        // Create second transaction
+        var transaction2 = lockManager.submitTransaction(
+            new TransactionalChangeImpl<>(
+                List.of(getRootIntegerReplaceSingleValuedEAttributeChange(), getDeleteRootEObjectChange())
+            )
+        );
+        // T1 acquires lock for op1
+        transaction1.setToRunning();
+        assertTrue(lockManager.acquireLocksForNextOperation(transaction1).isEmpty());
+        // T2 acquires lock for op1, but not for op2
+        transaction2.setToRunning();
+        assertTrue(lockManager.acquireLocksForNextOperation(transaction2).isEmpty());
+        assertFalse(lockManager.acquireLocksForNextOperation(transaction2).isEmpty());
+
+        // Get current locks of t1, expect 3 of them
+        var currentLocks = lockManager.getLocksHeldBy(transaction1);
+        assertEquals(3, currentLocks.size());
+
+        // Release each lock for the first operation
+        for (var lockOfT1Op1: currentLocks) {
+            lockManager.unsetLock(lockOfT1Op1, transaction1);
+        }
+        // Transaction 1 must not hold locks now
+        assertTrue(lockManager.getLocksHeldBy(transaction1).isEmpty());
+        // Transaction 2 retains its locks
+        var locksOfT2 = lockManager.getLocksHeldBy(transaction2);
+        assertEquals(2, locksOfT2.size());
+        assertLock(locksOfT2, ROOT, LockMode.SHARED_INTENSIONAL_EXCLUSIVE, null);
+        assertLock(locksOfT2, ROOT, LockMode.EXCLUSIVE, ROOT_INTEGER_E_ATTRIBUTE);
+        // Transaction 2 can proceed with op2
+        transaction2.setToRunning();
+        assertTrue(lockManager.acquireLocksForNextOperation(transaction2).isEmpty());
+
+        // Transaction 1 should fail to acquire further locks
+        assertThrows(IllegalArgumentException.class,
+            () -> lockManager.acquireLocksForNextOperation(transaction1));
+    }
+
     void assertLockConflict(EChange<EObject> change1, EChange<EObject> change2) {
         setup();
         // Create two transactions

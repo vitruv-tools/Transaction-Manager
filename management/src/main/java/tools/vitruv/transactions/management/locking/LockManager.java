@@ -31,6 +31,11 @@ public class LockManager<E> {
      * Maps {@link Lock}s to the current lock mode.
      */
     private final Map<Lock<E>, LockMode> lockMode = new HashMap<>();
+    /**
+     * Checks if a transaction has started to release locks.
+     * In that case, it must not acquire further locks.
+     */
+    private final Map<Transaction<E>, Boolean> unlocking = new HashMap<>();
 
     /**
      * Submits a new {@link VitruviusChange} to run as transaction.
@@ -40,6 +45,7 @@ public class LockManager<E> {
     public Transaction<E> submitTransaction(VitruviusChange<E> change) {
         var newTransaction = new Transaction<>(change);
         locksForTransactions.put(newTransaction, new HashSet<>());
+        unlocking.put(newTransaction, false);
         return newTransaction;
     }
 
@@ -51,7 +57,7 @@ public class LockManager<E> {
      */
     public Set<Lock<E>> getLocksHeldBy(Transaction<E> transaction) {
         checkArgument(locksForTransactions.containsKey(transaction), "The transaction is not currently active!");
-        return Collections.unmodifiableSet(locksForTransactions.get(transaction));
+        return Set.copyOf(locksForTransactions.get(transaction));
     }
 
     /**
@@ -66,7 +72,9 @@ public class LockManager<E> {
      * @return {@link Optional}
      */
     public Optional<Set<Transaction<E>>> acquireLocksForNextOperation(Transaction<E> transaction) {
-        checkArgument(locksForTransactions.containsKey(transaction), "This transaction may not acquire locks!");
+        checkArgument(locksForTransactions.containsKey(transaction), "Transactions is not being processed!");
+        checkArgument(unlocking.get(transaction) == false, "Transaction has started to unlock; it must not acquire further locks!");
+        checkArgument(transaction.getStatus() == TransactionStatus.RUNNING, "Cannot acquire locks if the transaction is not running!");
         // Peek operation
         var operation = transaction.peekNextOperation();
         // Compute locks
@@ -90,7 +98,7 @@ public class LockManager<E> {
     }
 
     /**
-     * Acquires {@code lock} for {@link Transaction}
+     * Acquires {@code lockToAcquire} for {@code transaction}.
      *
      * @param lockToAcquire - {@link Lock}
      * @param transaction -  {@link Transaction}
@@ -165,6 +173,32 @@ public class LockManager<E> {
             lockMode.get(lockToAcquire) == LockMode.SHARED_INTENSIONAL_EXCLUSIVE) {
             lockingTransactions.add(transaction);
             locksForTransactions.get(transaction).add(lockToAcquire);
+        }
+    }
+
+    /**
+     * Releases {@code lock} if it held by the {@code lockHolder} transaction.
+     *
+     * @param lock - {@link Lock}
+     * @param lockHolder - {@link Transaction}
+     */
+    public void unsetLock(Lock<E> lock, Transaction<E> lockHolder) {
+        // Transaction must be registered
+        checkArgument(locksForTransactions.containsKey(lockHolder), "Transaction is not currently active!");
+        var locks = locksForTransactions.get(lockHolder);
+        checkArgument(locks.contains(lock), "Transaction does not hold the lock!");
+
+        // Mark transactions as unlocking/shrinking
+        unlocking.replace(lockHolder, true);
+        // Release lock for transaction
+        locks.remove(lock);
+        // Remove lockHolder
+        var lockHoldingTransactions = lockHolders.get(lock);
+        lockHoldingTransactions.remove(lockHolder);
+        // If no transactions hold the lock, remove the lock as well
+        if (lockHoldingTransactions.isEmpty()) {
+            lockHolders.remove(lock);
+            lockMode.remove(lock);
         }
     }
 
