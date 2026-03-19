@@ -93,7 +93,7 @@ public class LockManager<E> {
         for (var lock: locksToAcquire) {
             setLock(lock, transaction);
         }
-        transaction.acceptNextOperation();
+        transaction.markNextOperationAsExecutable();
         return Optional.empty();
     }
 
@@ -136,8 +136,6 @@ public class LockManager<E> {
      *
      * @param lockToAcquire - {@link Lock}
      * @param transaction -  {@link Transaction}
-     * @return {@link Optional}
-     *  The Optional type holds another transaction that already has the lock, and prevents its acquisition.
      */
     public synchronized void setLock(Lock<E> lockToAcquire, Transaction<E> transaction) {
         checkArgument(locksForTransactions.containsKey(transaction), "This transaction may not acquire locks!");

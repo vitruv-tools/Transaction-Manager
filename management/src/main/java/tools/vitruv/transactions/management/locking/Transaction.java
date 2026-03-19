@@ -102,9 +102,24 @@ public class Transaction<Element> {
     /**
      * Accepts the next operation when in peeking mode, because the tests for it have succeeded.
      */
-    public void acceptNextOperation() {
+    public void markNextOperationAsExecutable() {
         checkState(status == TransactionStatus.RUNNING, "Can only advance a running transaction!");
         checkState(peeking != null, "We are not peeking for some operation!");
         peeking = null;
+    }
+
+    /**
+     * Goes back to the previous operation because the current operation cannot be executed right now.
+     *
+     * @return boolean - true if there is another operation that has been accepted,
+     *  false if there is none other.
+     */
+    public boolean goToPreviousOperation() {
+        checkState(status == TransactionStatus.BLOCKED, "Can not go back to previous operation for non-blocking transactions!");
+        var hasPrevious = operationIterator.hasPrevious();
+        if (hasPrevious) {
+            peeking = operationIterator.previous();
+        }
+        return hasPrevious;
     }
 }

@@ -380,7 +380,7 @@ public class LockingTest {
         // T1 -> first operation, SIX lock on ROOT and X lock on integer EAttribute
         transaction1.setToRunning();
         var locks = lockManager.computeNextLocksFor(transaction1);
-        transaction1.acceptNextOperation();
+        transaction1.markNextOperationAsExecutable();
         locks.forEach(lock -> lockManager.setLock(lock, transaction1));
 
         assertEquals(2, locks.size());
@@ -390,7 +390,7 @@ public class LockingTest {
 
         // T1 -> second operation, X locks on ROOT and on EAttribute
         var locksOp2 = lockManager.computeNextLocksFor(transaction1);
-        transaction1.acceptNextOperation();
+        transaction1.markNextOperationAsExecutable();
         locksOp2.forEach(lock -> lockManager.setLock(lock, transaction1));
         var locksOfT1 = lockManager.getLocksHeldBy(transaction1);
         assertEquals(2, locksOfT1.size());
@@ -431,6 +431,37 @@ public class LockingTest {
         assertThrows(IllegalStateException.class, transaction::setToCommited);
         // Peek operation, allow double peek
         assertEquals(transaction.peekNextOperation(), transaction.peekNextOperation());
+    }
+
+    @Test
+    void testC2PLBlockingResolutionStrategy() {
+        var transactionThatBlocks = lockManager.submitTransaction(
+            new TransactionalChangeImpl<>(
+                List.of(getDeleteRootEObjectChange())
+            )
+        );
+
+        var transactionThatIsBlocked = lockManager.submitTransaction(
+            new TransactionalChangeImpl<>(
+                List.of(
+                    getIdentifiedRemoveEReferenceChange(),
+                    getIdentifiedInsertReferenceChange(),
+                    getRootIntegerReplaceSingleValuedEAttributeChange()
+                )
+            )
+        );
+
+        // Execute operations 1 and 2 of transactionThatIsBlocked
+        transactionThatIsBlocked.setToRunning();
+        assertFalse(lockManager.acquireLocksForNextOperation(transactionThatIsBlocked).isPresent());
+        assertFalse(lockManager.acquireLocksForNextOperation(transactionThatIsBlocked).isPresent());
+
+        // Now pretend that we need to release locks
+        transactionThatIsBlocked.setToBlocked();
+        assertTrue(transactionThatIsBlocked.goToPreviousOperation());
+        assertTrue(transactionThatIsBlocked.goToPreviousOperation());
+        assertFalse(transactionThatIsBlocked.goToPreviousOperation());
+        assertEquals(getIdentifiedRemoveEReferenceChange(), transactionThatIsBlocked.peekNextOperation());
     }
 
     /**
