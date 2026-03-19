@@ -1,0 +1,113 @@
+package tools.vitruv.transactions.management.locking;
+
+import tools.vitruv.change.composite.description.VitruviusChange;
+import tools.vitruv.framework.vsum.VirtualModel;
+
+import java.util.LinkedList;
+import java.util.Optional;
+import java.util.Queue;
+import java.util.Set;
+
+/**
+ * A scheduler implementing the Conservative Two-Phase Locking (C2PL) algorithm.
+ *
+ * @param <E> - Element type of the elements to lock.
+ */
+public class C2PLScheduler<E> extends AbstractScheduler<E>{
+    /**
+     * Lock manager used to determine if lock requests can be granted.
+     */
+    private final LockManager<E> lockManager = new LockManager<>();
+    /**
+     * Waiting queue for admitted transactions.
+     */
+    private final Queue<Transaction<E>> transactionQueue = new LinkedList<>();
+
+    /**
+     * Creates a new {@link C2PLScheduler}.
+     *
+     * @param multiModelEnvironment - {@link VirtualModel}
+     */
+    protected C2PLScheduler(VirtualModel multiModelEnvironment) {
+        super(multiModelEnvironment);
+    }
+
+    /**
+     * Admits a new transaction for {@code change} and reports this to
+     * all observers.
+     *
+     * @param change - {@link VitruviusChange}
+     */
+    @Override
+    public synchronized void admitTransaction(VitruviusChange<E> change) {
+        var newTransaction = lockManager.submitTransaction(change);
+        transactionQueue.add(newTransaction);
+        observers.forEach(observer -> observer.observeAdmission(newTransaction));
+    }
+
+    /**
+     * Runs the scheduling algorithm, with the following steps:
+     *
+     * <ol>
+     *     <li>Take the next queued transaction to execute.</li>
+     *     <li>Attempt to acquire all locks.</li>
+     *     <li>If successful, execute the transaction on {@code multiModelEnvironment}.</li>
+     *     <li>Otherwise, block the transaction.</li>
+     *     <li>When the lock request succeeds, </li>
+     * </ol>
+     * @return boolean
+     */
+    @Override
+    public synchronized boolean nextStep() {
+        if (transactionQueue.isEmpty()) {
+            return false;
+        }
+
+        // Take next transaction, mark as running
+        var transactionToExecute = transactionQueue.poll();
+        transactionToExecute.setToRunning();
+        observers.forEach(observer -> observer.observeRunning(transactionToExecute));
+
+        // Attempt to preclaim all locks
+        Optional<Set<Transaction<E>>> blockingTransactions;
+        while (transactionToExecute.hasOperationsToExecute()) {
+            blockingTransactions = lockManager.acquireLocksForNextOperation(transactionToExecute);
+            if (blockingTransactions.isPresent()) {
+                handleBlock(transactionToExecute, blockingTransactions.get());
+                return true;
+            }
+        }
+
+        // Lock request succeeded, execute all operations
+        for (var eChange: transactionToExecute.getUnderlyingChange().getEChanges()) {
+            observers.forEach(observer -> observer.observeExecutionOf(eChange, transactionToExecute));
+        }
+
+        // Release all locks
+        releaseAllLocksOf(transactionToExecute);
+        // Commit, add all unblocked transactions to the waiting queue.
+        var unblockedTransactions = lockManager.commit(transactionToExecute);
+        transactionQueue.addAll(unblockedTransactions);
+        observers.forEach(observer -> observer.observeCommit(transactionToExecute));
+        return true;
+    }
+
+    /**
+     * Handles a transaction block by releasing all locks that {@code transactionToExecute} holds,
+     * marking none its operations to be executable, and informing all observers.
+     *
+     * @param transactionToExecute - {@link Transaction}
+     * @param blockingTransactions - {@link Set}
+     */
+    private void handleBlock(Transaction<E> transactionToExecute, Set<Transaction<E>> blockingTransactions) {
+        releaseAllLocksOf(transactionToExecute);
+        // Go back to the start of the transaction, do not execute anything
+        while (transactionToExecute.goToPreviousOperation()) {}
+        observers.forEach(observer -> observer.observeBlockOf(transactionToExecute, blockingTransactions));
+    }
+
+    private void releaseAllLocksOf(Transaction<E> transaction) {
+        var locksToRelease = lockManager.getLocksHeldBy(transaction);
+        locksToRelease.forEach(lock -> lockManager.unsetLock(lock, transaction));
+    }
+}

@@ -36,6 +36,11 @@ public class LockManager<E> {
      * In that case, it must not acquire further locks.
      */
     private final Map<Transaction<E>, Boolean> unlocking = new HashMap<>();
+    /**
+     * Registers waits-for relations between transactions.
+     * We say that transaction t1 waits for t2 if ({@code waitsFor.get(t1).contains(t2)}).
+     */
+    private final Map<Transaction<E>, Set<Transaction<E>>> waitsForGraph = new HashMap<>();
 
     /**
      * Submits a new {@link VitruviusChange} to run as transaction.
@@ -46,6 +51,7 @@ public class LockManager<E> {
         var newTransaction = new Transaction<>(change);
         locksForTransactions.put(newTransaction, new HashSet<>());
         unlocking.put(newTransaction, false);
+        waitsForGraph.put(newTransaction, new HashSet<>());
         return newTransaction;
     }
 
@@ -85,6 +91,7 @@ public class LockManager<E> {
             var blockingTransactions = testLock(lock, transaction);
             if (blockingTransactions.isPresent()) {
                 // Mark transaction as blocked
+                waitsForGraph.get(transaction).addAll(blockingTransactions.get());
                 transaction.setToBlocked();
                 return blockingTransactions;
             }
@@ -198,6 +205,35 @@ public class LockManager<E> {
             lockHolders.remove(lock);
             lockMode.remove(lock);
         }
+    }
+
+    /**
+     * Commits {@code transaction}, assuming that all its operations have been executed,
+     * and all its locks have been released.
+     * <p>
+     * Upon that point, we update the {@link LockManager#waitsForGraph} relation, and return all
+     * transactions that are now unblocked.
+     *
+     * @param transaction - {@link Transaction}
+     * @return {@link Collection}
+     */
+    public synchronized Collection<Transaction<E>> commit(Transaction<E> transaction) {
+        checkArgument(transaction.getStatus() == TransactionStatus.RUNNING, "Only running transactions can be committed!");
+        checkArgument(!transaction.hasOperationsToExecute(), "Only transactions that have no more operations can be committed!");
+        checkArgument(!locksForTransactions.get(transaction).isEmpty(), "Only transactions that do not have locks can be commited!");
+
+        // Mark commit
+        transaction.setToCommited();
+        // Cleanup
+        locksForTransactions.remove(transaction);
+        unlocking.remove(transaction);
+        waitsForGraph.remove(transaction);
+        // Collect unblocked transactions
+        return waitsForGraph.entrySet()
+            .stream().peek(waitsFor -> waitsFor.getValue().remove(transaction))
+            .filter(waitsFor -> waitsFor.getValue().isEmpty())
+            .map(Map.Entry::getKey)
+            .toList();
     }
 
     /**

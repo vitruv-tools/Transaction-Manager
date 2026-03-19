@@ -5,6 +5,7 @@ import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
+import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -24,6 +25,7 @@ import java.util.HashSet;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static tools.vitruv.transactions.management.locking.TransactionStatus.COMMITED;
 import static tools.vitruv.transactions.management.locking.TransactionStatus.STARTED;
 
 public class LockingTest {
@@ -199,7 +201,10 @@ public class LockingTest {
         assertLock(locksHeldByTransaction, NON_ROOT, LockMode.SHARED_INTENSIONAL_EXCLUSIVE, null);
         assertLock(locksHeldByTransaction, ROOT, LockMode.EXCLUSIVE, ROOT_INTEGER_E_ATTRIBUTE);
         assertLock(locksHeldByTransaction, ROOT, LockMode.EXCLUSIVE, ROOT_NON_ROOT_E_REFERENCE);
-        transaction.setToCommited();
+
+        // Commit
+        lockManager.commit(transaction);
+        assertEquals(COMMITED, transaction.getStatus());
     }
 
     @Test
@@ -461,7 +466,11 @@ public class LockingTest {
         assertTrue(transactionThatIsBlocked.goToPreviousOperation());
         assertTrue(transactionThatIsBlocked.goToPreviousOperation());
         assertFalse(transactionThatIsBlocked.goToPreviousOperation());
-        assertEquals(getIdentifiedRemoveEReferenceChange(), transactionThatIsBlocked.peekNextOperation());
+        assertTrue(
+            EcoreUtil.equals(
+                getIdentifiedRemoveEReferenceChange(),
+                transactionThatIsBlocked.peekNextOperation())
+        );
     }
 
     /**
