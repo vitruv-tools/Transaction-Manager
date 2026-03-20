@@ -1,4 +1,4 @@
-package tools.vitruv.transactions.management.locking;
+package tools.vitruv.transactions.management;
 
 import tools.vitruv.change.atomic.EChange;
 

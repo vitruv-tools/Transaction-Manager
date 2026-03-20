@@ -1,4 +1,4 @@
-package tools.vitruv.transactions.management.locking;
+package tools.vitruv.transactions.management;
 
 import lombok.Getter;
 import tools.vitruv.change.atomic.EChange;
@@ -39,7 +39,7 @@ public class Transaction<Element> {
      *
      * @param underlyingChange - {@link VitruviusChange}
      */
-    Transaction(VitruviusChange<Element> underlyingChange) {
+    public Transaction(VitruviusChange<Element> underlyingChange) {
         checkState(underlyingChange.containsConcreteChange(), "Transactions can only be created for non-empty VitruviusChanges!");
         this.underlyingChange = underlyingChange;
         status = TransactionStatus.STARTED;

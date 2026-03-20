@@ -1,4 +1,4 @@
-package tools.vitruv.transactions.management.locking;
+package tools.vitruv.transactions.management;
 
 import lombok.Getter;
 import tools.vitruv.framework.vsum.VirtualModel;

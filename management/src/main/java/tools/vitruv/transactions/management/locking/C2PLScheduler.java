@@ -2,6 +2,8 @@ package tools.vitruv.transactions.management.locking;
 
 import tools.vitruv.change.composite.description.VitruviusChange;
 import tools.vitruv.framework.vsum.VirtualModel;
+import tools.vitruv.transactions.management.AbstractScheduler;
+import tools.vitruv.transactions.management.Transaction;
 
 import java.util.LinkedList;
 import java.util.Optional;
@@ -13,7 +15,7 @@ import java.util.Set;
  *
  * @param <E> - Element type of the elements to lock.
  */
-public class C2PLScheduler<E> extends AbstractScheduler<E>{
+public class C2PLScheduler<E> extends AbstractScheduler<E> {
     /**
      * Lock manager used to determine if lock requests can be granted.
      */

@@ -1,7 +1,8 @@
-package tools.vitruv.transactions.management.locking;
+package tools.vitruv.transactions.management;
 
 import tools.vitruv.change.composite.description.VitruviusChange;
 import tools.vitruv.framework.vsum.VirtualModel;
+import tools.vitruv.transactions.management.locking.Lock;
 
 /**
  * A generic scheduler interface.

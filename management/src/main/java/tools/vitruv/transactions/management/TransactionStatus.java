@@ -1,4 +1,4 @@
-package tools.vitruv.transactions.management.locking;
+package tools.vitruv.transactions.management;
 
 /**
  * The current processing status of a {@link Transaction}.

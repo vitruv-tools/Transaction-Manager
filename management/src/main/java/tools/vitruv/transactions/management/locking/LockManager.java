@@ -3,12 +3,9 @@ package tools.vitruv.transactions.management.locking;
 import java.util.*;
 import tools.vitruv.change.atomic.EChange;
 
-import tools.vitruv.change.atomic.eobject.CreateEObject;
-import tools.vitruv.change.atomic.eobject.DeleteEObject;
-import tools.vitruv.change.atomic.feature.attribute.ReplaceSingleValuedEAttribute;
-import tools.vitruv.change.atomic.feature.reference.InsertEReference;
-import tools.vitruv.change.atomic.feature.reference.RemoveEReference;
 import tools.vitruv.change.composite.description.VitruviusChange;
+import tools.vitruv.transactions.management.Transaction;
+import tools.vitruv.transactions.management.TransactionStatus;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
@@ -20,17 +17,13 @@ import static com.google.common.base.Preconditions.checkArgument;
  */
 public class LockManager<E> {
     /**
-     * Maps {@link Lock}s to one or more {@link Transaction}s that currently hold them.
+     * Manages lock information.
      */
-    private final Map<Lock<E>, Set<Transaction<E>>> lockHolders = new HashMap<>();
+    private final Map<Lock<E>, LockData<E>> lockData = new HashMap<>();
     /**
      * Maps {@link Transaction}s to one or more {@link Lock}s that they currently hold.
      */
     private final Map<Transaction<E>, Set<Lock<E>>> locksForTransactions = new HashMap<>();
-    /**
-     * Maps {@link Lock}s to the current lock mode.
-     */
-    private final Map<Lock<E>, LockMode> lockMode = new HashMap<>();
     /**
      * Checks if a transaction has started to release locks.
      * In that case, it must not acquire further locks.
@@ -84,7 +77,7 @@ public class LockManager<E> {
         // Peek operation
         var operation = transaction.peekNextOperation();
         // Compute locks
-        var locksToAcquire = computeLocksFor(operation);
+        var locksToAcquire = LockComputer.computeLocksFor(operation);
 
         // Identify all blocking transactions.
         for (var lock: locksToAcquire) {
@@ -113,15 +106,16 @@ public class LockManager<E> {
      *  The Optional type holds another transaction that already has the lock, and prevents its acquisition.
      */
     public synchronized Optional<Set<Transaction<E>>> testLock(Lock<E> lockToAcquire, Transaction<E> transaction) {
-        var lockingTransactions = lockHolders.get(lockToAcquire);
+        var data = lockData.get(lockToAcquire);
         // If no other transaction holds the lock, the request succeeds.
-        if (lockingTransactions == null) {
+        if (data == null) {
             return Optional.empty();
         }
 
         // If only the current transaction holds the lock, the request also succeeds.
         // Convert the lock, if required.
-        if (lockingTransactions.size() == 1 && lockingTransactions.contains(transaction)) {
+        var holdingTransactions = data.getHolders();
+        if (holdingTransactions.size() == 1 && holdingTransactions.contains(transaction)) {
             return Optional.empty();
         }
 
@@ -129,12 +123,12 @@ public class LockManager<E> {
         // is in SIX mode, the request succeeds, and transaction also becomes a lock holder.
         // If more than one transaction holds it, this is an indicator thereof.
         if (lockToAcquire.mode == LockMode.SHARED_INTENSIONAL_EXCLUSIVE &&
-            lockMode.get(lockToAcquire) == LockMode.SHARED_INTENSIONAL_EXCLUSIVE) {
+            data.getMode() == LockMode.SHARED_INTENSIONAL_EXCLUSIVE) {
             return Optional.empty();
         }
 
         // Return all locking transactions.
-        return Optional.of(lockingTransactions);
+        return Optional.of(holdingTransactions);
     }
 
 
@@ -146,39 +140,32 @@ public class LockManager<E> {
      */
     public synchronized void setLock(Lock<E> lockToAcquire, Transaction<E> transaction) {
         checkArgument(locksForTransactions.containsKey(transaction), "This transaction may not acquire locks!");
-
-        var lockingTransactions = lockHolders.get(lockToAcquire);
+        var data = lockData.get(lockToAcquire);
         // If no other transaction holds the lock, the request succeeds.
-        if (lockingTransactions == null) {
-            var newHolders = new HashSet<Transaction<E>>();
-            newHolders.add(transaction);
-            lockHolders.put(lockToAcquire, newHolders);
-            locksForTransactions.get(transaction).add(lockToAcquire);
-            lockMode.put(lockToAcquire, lockToAcquire.mode);
-            return;
-        }
+        if (data == null) {
+            lockData.put(lockToAcquire, new LockData<>(lockToAcquire, transaction));
+        } else {
+            var holders = data.getHolders();
+            // If only the current transaction holds the lock, the request also succeeds.
+            // Convert the lock, if required.
+            if (holders.size() == 1 && holders.contains(transaction)) {
+                var currentLockMode = data.getMode();
+                var newLockMode = LockMode.highestLockMode(currentLockMode, lockToAcquire.mode);
+                var upgradedLock = lockToAcquire.convert(newLockMode);
 
-        // If only the current transaction holds the lock, the request also succeeds.
-        // Convert the lock, if required.
-        if (lockingTransactions.size() == 1 && lockingTransactions.contains(transaction)) {
-            var currentLockMode = lockMode.get(lockToAcquire);
-            var newLockMode = LockMode.highestLockMode(currentLockMode, lockToAcquire.mode);
-            var upgradedLock = lockToAcquire.convert(newLockMode);
-
-            lockMode.put(upgradedLock, newLockMode);
-            lockHolders.put(upgradedLock, lockingTransactions);
-            locksForTransactions.get(transaction).add(lockToAcquire);
-            return;
+                lockData.put(upgradedLock, new LockData<>(upgradedLock, transaction));
+                return;
+            } else {
+                // If more than one transaction holds the lock in SIX mode, and the current transaction also
+                // is in SIX mode, the request succeeds, and transaction also becomes a lock holder.
+                // If more than one transaction holds it, this is an indicator thereof.
+                if (lockToAcquire.mode == LockMode.SHARED_INTENSIONAL_EXCLUSIVE &&
+                    data.getMode() == LockMode.SHARED_INTENSIONAL_EXCLUSIVE) {
+                    holders.add(transaction);
+                }
+            }
         }
-        
-        // If more than one transaction holds the lock in SIX mode, and the current transaction also
-        // is in SIX mode, the request succeeds, and transaction also becomes a lock holder.
-        // If more than one transaction holds it, this is an indicator thereof.
-        if (lockToAcquire.mode == LockMode.SHARED_INTENSIONAL_EXCLUSIVE &&
-            lockMode.get(lockToAcquire) == LockMode.SHARED_INTENSIONAL_EXCLUSIVE) {
-            lockingTransactions.add(transaction);
-            locksForTransactions.get(transaction).add(lockToAcquire);
-        }
+        locksForTransactions.get(transaction).add(lockToAcquire);
     }
 
     /**
@@ -198,12 +185,11 @@ public class LockManager<E> {
         // Release lock for transaction
         locks.remove(lock);
         // Remove lockHolder
-        var lockHoldingTransactions = lockHolders.get(lock);
-        lockHoldingTransactions.remove(lockHolder);
+        var data = lockData.get(lock);
+        data.getHolders().remove(lockHolder);
         // If no transactions hold the lock, remove the lock as well
-        if (lockHoldingTransactions.isEmpty()) {
-            lockHolders.remove(lock);
-            lockMode.remove(lock);
+        if (data.getHolders().isEmpty()) {
+            lockData.remove(lock);
         }
     }
 
@@ -245,46 +231,7 @@ public class LockManager<E> {
      */
     public List<Lock<E>> computeNextLocksFor(Transaction<E> transaction) {
         var nextOperation = transaction.peekNextOperation();
-        return computeLocksFor(nextOperation);
+        return LockComputer.computeLocksFor(nextOperation);
     }
 
-    /**
-     * Computes the required {@link Lock}s that an {@link EChange} requires.
-     *
-     * @param change - {@link EChange}
-     * @return {@link List}
-     */
-    public List<Lock<E>> computeLocksFor(EChange<E> change) {
-        if (change instanceof CreateEObject<E> c) {
-            return List.of(
-                new ElementLock<>(c.getAffectedElement(), LockMode.EXCLUSIVE)
-            );
-        }
-        if (change instanceof DeleteEObject<E> d) {
-           return List.of(
-               new ElementLock<>(d.getAffectedElement(), LockMode.EXCLUSIVE)
-           );
-        }
-        if (change instanceof ReplaceSingleValuedEAttribute<E, ?> s) {
-           return List.of(
-               new ElementLock<>(s.getAffectedElement(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
-               new FeatureLock<>(s.getAffectedElement(), s.getAffectedFeature())
-           );
-        }
-        if (change instanceof InsertEReference<E> a) {
-           return List.of(
-               new ElementLock<>(a.getAffectedElement(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
-               new ElementLock<>(a.getNewValue(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
-               new FeatureLock<>(a.getAffectedElement(), a.getAffectedFeature())
-           );
-        }
-        if (change instanceof RemoveEReference<E> d) {
-            return List.of(
-               new ElementLock<>(d.getAffectedElement(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
-               new ElementLock<>(d.getOldValue(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
-               new FeatureLock<>(d.getAffectedElement(), d.getAffectedFeature())
-            );
-        }
-        return List.of();
-    }
 }
