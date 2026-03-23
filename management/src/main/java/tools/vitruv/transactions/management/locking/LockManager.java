@@ -21,19 +21,9 @@ public class LockManager<E> {
      */
     private final Map<Lock<E>, LockData<E>> lockData = new HashMap<>();
     /**
-     * Maps {@link Transaction}s to one or more {@link Lock}s that they currently hold.
+     * Manages transaction information.
      */
-    private final Map<Transaction<E>, Set<Lock<E>>> locksForTransactions = new HashMap<>();
-    /**
-     * Checks if a transaction has started to release locks.
-     * In that case, it must not acquire further locks.
-     */
-    private final Map<Transaction<E>, Boolean> unlocking = new HashMap<>();
-    /**
-     * Registers waits-for relations between transactions.
-     * We say that transaction t1 waits for t2 if ({@code waitsFor.get(t1).contains(t2)}).
-     */
-    private final Map<Transaction<E>, Set<Transaction<E>>> waitsForGraph = new HashMap<>();
+    private final Map<Transaction<E>, TransactionLockingData<E>> transactionData = new HashMap<>();
 
     /**
      * Submits a new {@link VitruviusChange} to run as transaction.
@@ -42,9 +32,7 @@ public class LockManager<E> {
      */
     public synchronized Transaction<E> submitTransaction(VitruviusChange<E> change) {
         var newTransaction = new Transaction<>(change);
-        locksForTransactions.put(newTransaction, new HashSet<>());
-        unlocking.put(newTransaction, false);
-        waitsForGraph.put(newTransaction, new HashSet<>());
+        transactionData.put(newTransaction, new TransactionLockingData<>());
         return newTransaction;
     }
 
@@ -55,8 +43,8 @@ public class LockManager<E> {
      * @return {@link Set}
      */
     public synchronized Set<Lock<E>> getLocksHeldBy(Transaction<E> transaction) {
-        checkArgument(locksForTransactions.containsKey(transaction), "The transaction is not currently active!");
-        return Set.copyOf(locksForTransactions.get(transaction));
+        checkArgument(transactionData.containsKey(transaction), "The transaction is not currently active!");
+        return Set.copyOf(transactionData.get(transaction).getHeldLocks());
     }
 
     /**
@@ -71,8 +59,9 @@ public class LockManager<E> {
      * @return {@link Optional}
      */
     public synchronized Optional<Set<Transaction<E>>> acquireLocksForNextOperation(Transaction<E> transaction) {
-        checkArgument(locksForTransactions.containsKey(transaction), "Transactions is not being processed!");
-        checkArgument(unlocking.get(transaction) == false, "Transaction has started to unlock; it must not acquire further locks!");
+        var data = transactionData.get(transaction);
+        checkArgument(data != null, "Transactions is not being processed!");
+        checkArgument(!data.isUnlocking(), "Transaction has started to unlock; it must not acquire further locks!");
         checkArgument(transaction.getStatus() == TransactionStatus.RUNNING, "Cannot acquire locks if the transaction is not running!");
         // Peek operation
         var operation = transaction.peekNextOperation();
@@ -84,7 +73,7 @@ public class LockManager<E> {
             var blockingTransactions = testLock(lock, transaction);
             if (blockingTransactions.isPresent()) {
                 // Mark transaction as blocked
-                waitsForGraph.get(transaction).addAll(blockingTransactions.get());
+                data.blockOn(blockingTransactions.get());
                 transaction.setToBlocked();
                 return blockingTransactions;
             }
@@ -133,25 +122,25 @@ public class LockManager<E> {
 
 
     /**
-     * Actually acquires {@code lock} for {@code transaction} and updates information in this lock manager.
+     * Actually acquires a lock for {@code transaction} and updates information in the lock manager.
      *
-     * @param lockToAcquire - {@link Lock}
+     * @param acquiredLock - {@link Lock}
      * @param transaction -  {@link Transaction}
      */
-    public synchronized void setLock(Lock<E> lockToAcquire, Transaction<E> transaction) {
-        checkArgument(locksForTransactions.containsKey(transaction), "This transaction may not acquire locks!");
-        var data = lockData.get(lockToAcquire);
+    public synchronized void setLock(Lock<E> acquiredLock, Transaction<E> transaction) {
+        checkArgument(transactionData.containsKey(transaction), "This transaction may not acquire locks!");
+        var data = lockData.get(acquiredLock);
         // If no other transaction holds the lock, the request succeeds.
         if (data == null) {
-            lockData.put(lockToAcquire, new LockData<>(lockToAcquire, transaction));
+            lockData.put(acquiredLock, new LockData<>(acquiredLock, transaction));
         } else {
             var holders = data.getHolders();
             // If only the current transaction holds the lock, the request also succeeds.
             // Convert the lock, if required.
             if (holders.size() == 1 && holders.contains(transaction)) {
                 var currentLockMode = data.getMode();
-                var newLockMode = LockMode.highestLockMode(currentLockMode, lockToAcquire.mode);
-                var upgradedLock = lockToAcquire.convert(newLockMode);
+                var newLockMode = LockMode.highestLockMode(currentLockMode, acquiredLock.mode);
+                var upgradedLock = acquiredLock.convert(newLockMode);
 
                 lockData.put(upgradedLock, new LockData<>(upgradedLock, transaction));
                 return;
@@ -159,13 +148,13 @@ public class LockManager<E> {
                 // If more than one transaction holds the lock in SIX mode, and the current transaction also
                 // is in SIX mode, the request succeeds, and transaction also becomes a lock holder.
                 // If more than one transaction holds it, this is an indicator thereof.
-                if (lockToAcquire.mode == LockMode.SHARED_INTENSIONAL_EXCLUSIVE &&
+                if (acquiredLock.mode == LockMode.SHARED_INTENSIONAL_EXCLUSIVE &&
                     data.getMode() == LockMode.SHARED_INTENSIONAL_EXCLUSIVE) {
                     holders.add(transaction);
                 }
             }
         }
-        locksForTransactions.get(transaction).add(lockToAcquire);
+        transactionData.get(transaction).registerLock(acquiredLock);
     }
 
     /**
@@ -176,19 +165,18 @@ public class LockManager<E> {
      */
     public synchronized void unsetLock(Lock<E> lock, Transaction<E> lockHolder) {
         // Transaction must be registered
-        checkArgument(locksForTransactions.containsKey(lockHolder), "Transaction is not currently active!");
-        var locks = locksForTransactions.get(lockHolder);
+        var data = transactionData.get(lockHolder);
+        checkArgument(data != null, "Transaction is not currently active!");
+        var locks = data.getHeldLocks();
         checkArgument(locks.contains(lock), "Transaction does not hold the lock!");
 
-        // Mark transactions as unlocking/shrinking
-        unlocking.replace(lockHolder, true);
-        // Release lock for transaction
-        locks.remove(lock);
+        // Update locking information
+        data.unregisterLock(lock);
         // Remove lockHolder
-        var data = lockData.get(lock);
-        data.getHolders().remove(lockHolder);
+        var lockData1 = lockData.get(lock);
+        lockData1.getHolders().remove(lockHolder);
         // If no transactions hold the lock, remove the lock as well
-        if (data.getHolders().isEmpty()) {
+        if (lockData1.getHolders().isEmpty()) {
             lockData.remove(lock);
         }
     }
@@ -197,7 +185,7 @@ public class LockManager<E> {
      * Commits {@code transaction}, assuming that all its operations have been executed,
      * and all its locks have been released.
      * <p>
-     * Upon that point, we update the {@link LockManager#waitsForGraph} relation, and return all
+     * Upon that point, we update the {@code waitsForGraph} relation, and return all
      * transactions that are now unblocked.
      *
      * @param transaction - {@link Transaction}
@@ -206,18 +194,18 @@ public class LockManager<E> {
     public synchronized Collection<Transaction<E>> commit(Transaction<E> transaction) {
         checkArgument(transaction.getStatus() == TransactionStatus.RUNNING, "Only running transactions can be committed!");
         checkArgument(!transaction.hasOperationsToExecute(), "Only transactions that have no more operations can be committed!");
-        checkArgument(!locksForTransactions.get(transaction).isEmpty(), "Only transactions that do not have locks can be commited!");
+        var data = transactionData.get(transaction);
+        checkArgument(data.getHeldLocks().isEmpty(), "Only transactions that do not have locks can be commited!");
 
         // Mark commit
         transaction.setToCommited();
         // Cleanup
-        locksForTransactions.remove(transaction);
-        unlocking.remove(transaction);
-        waitsForGraph.remove(transaction);
+        transactionData.remove(transaction);
         // Collect unblocked transactions
-        return waitsForGraph.entrySet()
-            .stream().peek(waitsFor -> waitsFor.getValue().remove(transaction))
-            .filter(waitsFor -> waitsFor.getValue().isEmpty())
+        return transactionData
+            .entrySet()
+            .stream()
+            .filter(entry -> entry.getValue().unblock(transaction))
             .map(Map.Entry::getKey)
             .toList();
     }

@@ -17,9 +17,23 @@ public abstract class AbstractScheduler<E> implements Scheduler<E>{
     protected final List<SchedulingEventObserver<E>> observers
         = new LinkedList<>();
 
+    /**
+     * Creates a new {@link AbstractScheduler}.
+     *
+     * @param multiModelEnvironment - {@link VirtualModel}
+     */
     protected AbstractScheduler(VirtualModel multiModelEnvironment) {
         this.multiModelEnvironment = multiModelEnvironment;
     }
+
+    /**
+     * Applies {@code transaction} on {@link AbstractScheduler#multiModelEnvironment}.
+     * <p>
+     * Concrete implementations of this method can make further restrictions on {@code transaction}
+     * and {@link AbstractScheduler#multiModelEnvironment}.
+     * @param transaction - {@link Transaction}
+     */
+    protected abstract void applyTransactionOnEnvironment(Transaction<E> transaction);
 
     @Override
     public void addListener(SchedulingEventObserver<E> observer) {

@@ -12,7 +12,7 @@ import java.util.Set;
  * @param <E> - The data type of locking {@link Transaction}s.
  */
 @Data
-public class LockData<E> {
+class LockData<E> {
     /**
      * What transactions hold this lock at present?
      */
@@ -28,7 +28,7 @@ public class LockData<E> {
      * @param newLock - {@link Lock}
      * @param firstHolder - {@link Transaction}
      */
-    public LockData(Lock<E> newLock, Transaction<E> firstHolder) {
+    LockData(Lock<E> newLock, Transaction<E> firstHolder) {
         holders.add(firstHolder);
         mode = newLock.mode;
     }

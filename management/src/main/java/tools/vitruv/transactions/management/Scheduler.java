@@ -2,14 +2,12 @@ package tools.vitruv.transactions.management;
 
 import tools.vitruv.change.composite.description.VitruviusChange;
 import tools.vitruv.framework.vsum.VirtualModel;
-import tools.vitruv.transactions.management.locking.Lock;
 
 /**
  * A generic scheduler interface.
  *
  * Takes complete {@link VitruviusChange}s and ensures their transactional
  * application on a {@link VirtualModel}, which acts as multi-model environment.
- * Assumes that transactions may hold {@link Lock}s.
  *
  * @param <E> - Type of model elements an environment holds.
  */
