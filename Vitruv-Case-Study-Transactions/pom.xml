@@ -13,7 +13,7 @@
   </parent>
 
   <!-- Project Information -->
-  <artifactId>tools.vitruv.methodologisttemplate</artifactId>
+  <artifactId>tools.vitruv.methodologisttemplate.transactions</artifactId>
   <version>0.1.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 

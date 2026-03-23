@@ -22,7 +22,8 @@
 
 
   <properties>
-    <vitruv.version>3.2.4-SNAPSHOT</vitruv.version>
+    <vitruv.version>3.2.5-SNAPSHOT</vitruv.version>
+    <vitruv-dsls.version>3.2.4-SNAPSHOT</vitruv-dsls.version>
     <maven.compiler.release>21</maven.compiler.release>
     <maven.compiler.source>21</maven.compiler.source>
     <maven.compiler.target>21</maven.compiler.target>
@@ -109,6 +110,26 @@
       <dependency>
         <groupId>tools.vitruv</groupId>
         <artifactId>tools.vitruv.framework.vsum</artifactId>
+        <version>${vitruv.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>tools.vitruv</groupId>
+        <artifactId>tools.vitruv.methodologisttemplate.transactions</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+      </dependency>
+      <dependency>
+        <groupId>tools.vitruv</groupId>
+        <artifactId>tools.vitruv.change.testutils.core</artifactId>
+        <version>${vitruv.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>tools.vitruv</groupId>
+        <artifactId>tools.vitruv.change.testutils.integration</artifactId>
+        <version>${vitruv.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>tools.vitruv</groupId>
+        <artifactId>tools.vitruv.change.interaction</artifactId>
         <version>${vitruv.version}</version>
       </dependency>
     </dependencies>
