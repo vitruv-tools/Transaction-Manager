@@ -48,9 +48,9 @@ public class CommonCreatorClasses {
             .createCreateEObjectChange(ROOT);
     }
 
-    static DeleteEObject<EObject> getDeleteRootEObjectChange() {
+    static DeleteEObject<EObject> getDeleteRootEObjectChange(Root root) {
         return E_CHANGE_FACTORY
-            .createDeleteEObjectChange(ROOT);
+            .createDeleteEObjectChange(root);
     }
 
     static RemoveEReference<EObject> getIdentifiedRemoveEReferenceChange() {

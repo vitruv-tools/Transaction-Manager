@@ -1,0 +1,62 @@
+package tools.vitruv.transactions.management;
+
+import lombok.experimental.UtilityClass;
+import org.eclipse.emf.ecore.EObject;
+import tools.vitruv.change.atomic.EChange;
+import tools.vitruv.change.atomic.TypeInferringAtomicEChangeFactory;
+import tools.vitruv.change.atomic.eobject.CreateEObject;
+import tools.vitruv.change.atomic.eobject.DeleteEObject;
+import tools.vitruv.change.atomic.feature.attribute.ReplaceSingleValuedEAttribute;
+import tools.vitruv.change.atomic.feature.reference.InsertEReference;
+import tools.vitruv.change.atomic.feature.reference.RemoveEReference;
+
+@UtilityClass
+public class InverseEChangeComputer {
+    private static final TypeInferringAtomicEChangeFactory eChangeFactory =
+        TypeInferringAtomicEChangeFactory.getInstance();
+
+    /**
+     * Given the {@link EChange} {@code input}, returns the {@link EChange} that would reverse it,
+     * i.e. applying {@code computeInverseOf(input)} after {@code input} would leave a multimodel
+     * environment in the state as it was before applying {@code input}.
+     *
+     * @param input - {@link EChange}
+     * @return {@link EChange}
+     * @param <E> Type of the elements.
+     */
+    public static <E extends EObject> EChange<E> computeInverseOf(EChange<E> input) {
+        return switch (input) {
+            case CreateEObject<E> create:
+                yield eChangeFactory.createDeleteEObjectChange(
+                    create.getAffectedElement()
+                );
+            case DeleteEObject<E> delete:
+                yield eChangeFactory.createCreateEObjectChange(
+                    delete.getAffectedElement()
+                );
+            case ReplaceSingleValuedEAttribute<E, ?> replace:
+                yield eChangeFactory.createReplaceSingleAttributeChange(
+                    replace.getAffectedElement(),
+                    replace.getAffectedFeature(),
+                    replace.getNewValue(),
+                    replace.getOldValue()
+                );
+            case InsertEReference<E> insert:
+                yield eChangeFactory.createRemoveReferenceChange(
+                    insert.getAffectedElement(),
+                    insert.getAffectedFeature(),
+                    insert.getNewValue(),
+                    insert.getIndex()
+                );
+            case RemoveEReference<E> remove:
+                yield eChangeFactory.createInsertReferenceChange(
+                    remove.getAffectedElement(),
+                    remove.getAffectedFeature(),
+                    remove.getOldValue(),
+                    remove.getIndex()
+                );
+            default:
+                yield null;
+        };
+    }
+}

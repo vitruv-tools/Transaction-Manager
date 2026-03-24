@@ -1,19 +1,19 @@
 package tools.vitruv.transactions.management.locking;
 
+import org.eclipse.emf.ecore.EObject;
+import tools.vitruv.change.atomic.uuid.AtomicEChangeUuidResolver;
 import tools.vitruv.change.atomic.uuid.Uuid;
 import tools.vitruv.change.composite.description.VitruviusChange;
-import tools.vitruv.change.propagation.ChangePropagationMode;
+import tools.vitruv.change.composite.description.impl.TransactionalChangeImpl;
 import tools.vitruv.framework.vsum.VirtualModel;
+import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
 import tools.vitruv.transactions.management.AbstractScheduler;
 import tools.vitruv.transactions.management.Transaction;
 
-import java.util.LinkedList;
 import java.util.Optional;
-import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-import static com.google.common.base.Preconditions.checkState;
 
 /**
  * A scheduler implementing the Conservative Two-Phase Locking (C2PL) algorithm.
@@ -22,15 +22,15 @@ import static com.google.common.base.Preconditions.checkState;
  * Currently, this is "ensured" by checking the absence of consistency preservation rules in
  * the environment.
  */
-public class C2PLScheduler extends AbstractScheduler<Uuid> {
+public class C2PLScheduler extends AbstractScheduler<EObject> {
     /**
      * Lock manager used to determine if lock requests can be granted.
      */
-    private final LockManager<Uuid> lockManager = new LockManager<>();
+    private final LockManager<EObject> lockManager = new LockManager<>();
     /**
      * Waiting queue for admitted transactions.
      */
-    private final ConcurrentLinkedQueue<Transaction<Uuid>> transactionQueue
+    private final ConcurrentLinkedQueue<Transaction<EObject>> transactionQueue
         = new ConcurrentLinkedQueue<>();
 
     /**
@@ -38,13 +38,20 @@ public class C2PLScheduler extends AbstractScheduler<Uuid> {
      *
      * @param multiModelEnvironment - {@link VirtualModel}
      */
-    public C2PLScheduler(VirtualModel multiModelEnvironment) {
+    public C2PLScheduler(InternalVirtualModel multiModelEnvironment) {
         super(multiModelEnvironment);
     }
 
     @Override
-    protected void applyTransactionOnEnvironment(Transaction<Uuid> transaction) {
-        multiModelEnvironment.propagateChange(transaction.getUnderlyingChange());
+    protected void applyTransactionOnEnvironment(Transaction<EObject> transaction) {
+        var changeResolver = new AtomicEChangeUuidResolver(multiModelEnvironment.getUuidResolver());
+        var actualChange = new TransactionalChangeImpl<>(
+            transaction.getUnderlyingChange().getEChanges()
+                .stream()
+                .map(changeResolver::assignIds)
+                .toList()
+        );
+        multiModelEnvironment.propagateChange(actualChange);
     }
 
     /**
@@ -54,7 +61,7 @@ public class C2PLScheduler extends AbstractScheduler<Uuid> {
      * @param change - {@link VitruviusChange}
      */
     @Override
-    public void admitTransaction(VitruviusChange<Uuid> change) {
+    public void admitTransaction(VitruviusChange<EObject> change) {
         var newTransaction = lockManager.submitTransaction(change);
         transactionQueue.add(newTransaction);
         observers.forEach(observer -> observer.observeAdmission(newTransaction));
@@ -84,7 +91,7 @@ public class C2PLScheduler extends AbstractScheduler<Uuid> {
         observers.forEach(observer -> observer.observeRunning(transactionToExecute));
 
         // Attempt to preclaim all locks
-        Optional<Set<Transaction<Uuid>>> blockingTransactions;
+        Optional<Set<Transaction<EObject>>> blockingTransactions;
         while (transactionToExecute.hasOperationsToExecute()) {
             blockingTransactions = lockManager.acquireLocksForNextOperation(transactionToExecute);
             if (blockingTransactions.isPresent()) {
@@ -116,14 +123,14 @@ public class C2PLScheduler extends AbstractScheduler<Uuid> {
      * @param transactionToExecute - {@link Transaction}
      * @param blockingTransactions - {@link Set}
      */
-    private void handleBlock(Transaction<Uuid> transactionToExecute, Set<Transaction<Uuid>> blockingTransactions) {
+    private void handleBlock(Transaction<EObject> transactionToExecute, Set<Transaction<EObject>> blockingTransactions) {
         releaseAllLocksOf(transactionToExecute);
         // Go back to the start of the transaction, do not execute anything
         while (transactionToExecute.goToPreviousOperation()) {}
         observers.forEach(observer -> observer.observeBlockOf(transactionToExecute, blockingTransactions));
     }
 
-    private void releaseAllLocksOf(Transaction<Uuid> transaction) {
+    private void releaseAllLocksOf(Transaction<EObject> transaction) {
         var locksToRelease = lockManager.getLocksHeldBy(transaction);
         locksToRelease.forEach(lock -> lockManager.unsetLock(lock, transaction));
     }

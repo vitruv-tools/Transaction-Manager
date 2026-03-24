@@ -19,5 +19,10 @@ public enum TransactionStatus {
     /**
      * Transaction has executed all operations and commited.
      */
-    COMMITED
+    COMMITED,
+    /**
+     * Transaction has encountered an error and needs to be aborted.
+     * Some operations may have been executed already.
+     */
+    ABORTING
 }

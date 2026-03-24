@@ -41,7 +41,7 @@ public class LockingTest {
         assertEquals(LockMode.EXCLUSIVE, createLock.getMode());
 
         // DeleteEChange
-        var deleteRootChange = CommonCreatorClasses.getDeleteRootEObjectChange();
+        var deleteRootChange = CommonCreatorClasses.getDeleteRootEObjectChange(CommonCreatorClasses.ROOT);
         var locksForDeleteRootChange = LockComputer.computeLocksFor(deleteRootChange);
 
         assertEquals(1, locksForDeleteRootChange.size());
@@ -119,7 +119,7 @@ public class LockingTest {
             ),
             CommonCreatorClasses.getIdentifiedInsertReferenceChange(),
             CommonCreatorClasses.getIdentifiedRemoveEReferenceChange(),
-            CommonCreatorClasses.getDeleteRootEObjectChange()
+            CommonCreatorClasses.getDeleteRootEObjectChange(CommonCreatorClasses.ROOT)
         );
         var vitruviusChange = new TransactionalChangeImpl<>(changes);
         var lockManager = new LockManager<EObject>();
@@ -168,7 +168,7 @@ public class LockingTest {
             CommonCreatorClasses.E_CHANGE_FACTORY.createDeleteEObjectChange(CommonCreatorClasses.NON_ROOT)
         );
         assertLockCompatibility(
-            CommonCreatorClasses.getDeleteRootEObjectChange(),
+            CommonCreatorClasses.getDeleteRootEObjectChange(CommonCreatorClasses.ROOT),
             CommonCreatorClasses.E_CHANGE_FACTORY.createCreateEObjectChange(CommonCreatorClasses.NON_ROOT)
         );
         assertLockCompatibility(
@@ -205,14 +205,14 @@ public class LockingTest {
         );
         assertLockConflict(
             CommonCreatorClasses.getRootIntegerReplaceSingleValuedEAttributeChange(CommonCreatorClasses.ROOT),
-            CommonCreatorClasses.getDeleteRootEObjectChange()
+            CommonCreatorClasses.getDeleteRootEObjectChange(CommonCreatorClasses.ROOT)
         );
         assertLockConflict(
             CommonCreatorClasses.getIdentifiedInsertReferenceChange(),
             CommonCreatorClasses.getIdentifiedRemoveEReferenceChange()
         );
         assertLockConflict(
-            CommonCreatorClasses.getDeleteRootEObjectChange(),
+            CommonCreatorClasses.getDeleteRootEObjectChange(CommonCreatorClasses.ROOT),
             CommonCreatorClasses.getIdentifiedRemoveEReferenceChange()
         );
     }
@@ -222,7 +222,7 @@ public class LockingTest {
         // Create transaction, with two operations
         var transaction1 = lockManager.submitTransaction(
             new TransactionalChangeImpl<>(
-                List.of(CommonCreatorClasses.getIdentifiedInsertReferenceChange(), CommonCreatorClasses.getDeleteRootEObjectChange())
+                List.of(CommonCreatorClasses.getIdentifiedInsertReferenceChange(), CommonCreatorClasses.getDeleteRootEObjectChange(CommonCreatorClasses.ROOT))
             )
         );
         // Create second transaction
@@ -230,7 +230,7 @@ public class LockingTest {
             new TransactionalChangeImpl<>(
                 List.of(CommonCreatorClasses.getRootIntegerReplaceSingleValuedEAttributeChange(
                     CommonCreatorClasses.ROOT
-                ), CommonCreatorClasses.getDeleteRootEObjectChange())
+                ), CommonCreatorClasses.getDeleteRootEObjectChange(CommonCreatorClasses.ROOT))
             )
         );
         // T1 acquires lock for op1
@@ -318,7 +318,7 @@ public class LockingTest {
             new TransactionalChangeImpl<>(
                 List.of(
                     CommonCreatorClasses.getRootIntegerReplaceSingleValuedEAttributeChange(CommonCreatorClasses.ROOT),
-                    CommonCreatorClasses.getDeleteRootEObjectChange()
+                    CommonCreatorClasses.getDeleteRootEObjectChange(CommonCreatorClasses.ROOT)
                 )
             )
         );
@@ -369,7 +369,7 @@ public class LockingTest {
             CommonCreatorClasses.getRootIntegerReplaceSingleValuedEAttributeChange(CommonCreatorClasses.ROOT),
             CommonCreatorClasses.getIdentifiedInsertReferenceChange(),
             CommonCreatorClasses.getIdentifiedRemoveEReferenceChange(),
-            CommonCreatorClasses.getDeleteRootEObjectChange()
+            CommonCreatorClasses.getDeleteRootEObjectChange(CommonCreatorClasses.ROOT)
         );
         var vitruviusChange = new TransactionalChangeImpl<>(changes);
 
@@ -390,7 +390,7 @@ public class LockingTest {
     void testC2PLBlockingResolutionStrategy() {
         var transactionThatBlocks = lockManager.submitTransaction(
             new TransactionalChangeImpl<>(
-                List.of(CommonCreatorClasses.getDeleteRootEObjectChange())
+                List.of(CommonCreatorClasses.getDeleteRootEObjectChange(CommonCreatorClasses.ROOT))
             )
         );
 

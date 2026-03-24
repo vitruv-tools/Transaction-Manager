@@ -1,14 +1,21 @@
+import allElementTypes.AllElementTypesPackage;
+import allElementTypes.NonRoot;
 import allElementTypes.Root;
+import edu.kit.ipd.sdq.commons.util.java.Pair;
 import org.eclipse.emf.common.util.URI;
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.vitruv.change.atomic.EChange;
 import tools.vitruv.change.atomic.uuid.AtomicEChangeUuidResolver;
 import tools.vitruv.change.atomic.uuid.Uuid;
 import tools.vitruv.change.atomic.uuid.UuidResolver;
 import tools.vitruv.change.composite.description.VitruviusChange;
 import tools.vitruv.change.composite.description.impl.TransactionalChangeImpl;
+import tools.vitruv.change.testutils.metamodels.AllElementTypesCreators;
 import tools.vitruv.framework.views.CommittableView;
 import tools.vitruv.framework.views.View;
 import tools.vitruv.framework.views.ViewTypeFactory;
@@ -32,16 +39,21 @@ public class C2PLSchedulerTest {
     private UuidResolver uuidResolver;
     private AtomicEChangeUuidResolver changeResolver;
 
-    private void setupMultiModelEnvironment(Path testPath) throws IOException {
+    private void setupMultiModelEnvironment(Path testPath) {
         environment = new VirtualModelBuilder()
             .withStorageFolder(testPath)
             .withUserInteractorForResultProvider(new TestUserInteraction.ResultProvider(new TestUserInteraction()))
             .buildAndInitialize();
         var root = CommonCreatorClasses.ROOT;
+        var nonRoot = CommonCreatorClasses.NON_ROOT;
         var view = getDefaultView(environment).withChangeRecordingTrait();
         modifyView(view, (v) -> {
             v.registerRoot(root, URI.createFileURI(testPath + "/models/root.xml"));
         });
+        modifyView(view, (v) -> {
+            v.registerRoot(nonRoot, URI.createFileURI(testPath + "/models/nonroot.xml"));
+        });
+
 
         uuidResolver = environment.getUuidResolver();
         changeResolver = new AtomicEChangeUuidResolver(uuidResolver);
@@ -60,7 +72,7 @@ public class C2PLSchedulerTest {
         return selector.createView();
     }
 
-    private VitruviusChange<Uuid> getFirstChange() {
+    private VitruviusChange<EObject> getFirstChange() {
         var root = environment.createSelector(
             ViewTypeFactory.createIdentityMappingViewType("Root")
         )
@@ -70,18 +82,22 @@ public class C2PLSchedulerTest {
             .findFirst()
             .get();
 
-        var transactionalChange = new TransactionalChangeImpl<Uuid>(
-            Stream.of(
+        var transactionalChange = new TransactionalChangeImpl<>(
+            List.of(
                 CommonCreatorClasses.getRootIntegerReplaceSingleValuedEAttributeChange(
                     root
                 )
             )
-                .map(change -> changeResolver.assignIds(change))
-                .toList()
         );
         return transactionalChange;
     }
 
+    /**
+     * Tests that the C2PLScheduler applies one transaction correctly.
+     *
+     * @param testPath
+     * @throws IOException
+     */
     @Test
     void testCorrectApplicationOfOneChange(@TempDir Path testPath)
         throws IOException {
@@ -92,10 +108,71 @@ public class C2PLSchedulerTest {
         scheduler.admitTransaction(getFirstChange());
         scheduler.nextStep();
 
-        var newRoot = getDefaultView(environment)
-            .getRootObjects(Root.class)
-            .stream().findFirst().get();
+        var newRoot = getRoot();
 
         assertEquals(42, newRoot.getSingleValuedEAttribute());
+    }
+
+    private @NonNull Root getRoot() {
+        return environment.createSelector(
+                ViewTypeFactory.createIdentityMappingViewType("Root")
+            )
+            .getSelectableElements()
+            .stream().filter(e -> e instanceof Root)
+            .map(e -> (Root) e)
+            .findFirst()
+            .get();
+    }
+
+    private @NonNull NonRoot getNonRoot() {
+        return environment.createSelector(
+                ViewTypeFactory.createIdentityMappingViewType("Root")
+            )
+            .getSelectableElements()
+            .stream().filter(e -> e instanceof NonRoot)
+            .map(e -> (NonRoot) e)
+            .findFirst()
+            .get();
+    }
+
+    @Test
+    void testCorrectUndoHandling(@TempDir Path testPath) throws IOException {
+        setupMultiModelEnvironment(testPath);
+        var scheduler = new C2PLScheduler(environment);
+        var root = getRoot();
+        var nonRoot = getNonRoot();
+
+
+        // Transaction 2 -> create NonRoot, set Root attribute
+        var transaction2 = createTransactionFrom(List.of(
+            CommonCreatorClasses.E_CHANGE_FACTORY.createReplaceSingleAttributeChange(
+                nonRoot,
+                AllElementTypesPackage.eINSTANCE
+                    .getNonRoot_Value(),
+                null,
+                "42"
+            ),
+            CommonCreatorClasses.getRootIntegerReplaceSingleValuedEAttributeChange(root))
+        );
+
+        // Transaction 1 -> delete Root
+        var transaction1 = createTransactionFrom(List.of(
+            CommonCreatorClasses.getDeleteRootEObjectChange(root))
+        );
+
+        // Submit transactions
+        scheduler.admitTransaction(transaction1);
+        scheduler.admitTransaction(transaction2);
+
+        // Apply transaction 1
+        scheduler.nextStep();
+        // Apply transaction 2
+        scheduler.nextStep();
+    }
+
+    private TransactionalChangeImpl<EObject> createTransactionFrom(List<EChange<EObject>> originalChanges) {
+        return new TransactionalChangeImpl<>(
+            originalChanges
+        );
     }
 }
