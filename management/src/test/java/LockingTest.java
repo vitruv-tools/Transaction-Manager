@@ -1,5 +1,4 @@
 import lombok.Getter;
-import lombok.SneakyThrows;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.util.EcoreUtil;
@@ -9,14 +8,14 @@ import org.junit.jupiter.api.Test;
 import tools.vitruv.change.atomic.EChange;
 import tools.vitruv.change.composite.description.impl.TransactionalChangeImpl;
 import tools.vitruv.change.testutils.metamodels.AllElementTypesCreators;
+import tools.vitruv.transactions.management.Transaction;
 import tools.vitruv.transactions.management.locking.*;
 
 import java.util.*;
 
 import static java.lang.Thread.sleep;
 import static org.junit.jupiter.api.Assertions.*;
-import static tools.vitruv.transactions.management.TransactionStatus.COMMITED;
-import static tools.vitruv.transactions.management.TransactionStatus.STARTED;
+import static tools.vitruv.transactions.management.TransactionStatus.*;
 
 public class LockingTest {
 
@@ -450,12 +449,20 @@ public class LockingTest {
             .filter(runnable -> !runnable.locks.isEmpty())
             .toList();
         assertEquals(1, lockingRunnables.size());
+        // No transactions are currently blocked
+        assertTrue(
+            runnables.stream()
+            .allMatch(runnable ->
+                runnable.getTransaction().getStatus() != BLOCKED)
+        );
     }
 
     private static class LockRequestingRunnable implements Runnable {
         @Getter
         private final Set<Lock<EObject>> locks = new HashSet<>();
         private final LockManager<EObject> manager;
+        @Getter
+        private Transaction<EObject> transaction;
 
         LockRequestingRunnable(LockManager<EObject> manager) {
             this.manager = manager;
@@ -472,13 +479,26 @@ public class LockingTest {
             var attributeChange = CommonCreatorClasses.getRootIntegerReplaceSingleValuedEAttributeChange(
                 CommonCreatorClasses.ROOT
             );
-            var transaction = manager.submitTransaction(new TransactionalChangeImpl<>(
+            transaction = manager.submitTransaction(new TransactionalChangeImpl<>(
                 List.of(attributeChange)
             ));
             transaction.setToRunning();
             // Request locks
-            manager.acquireLocksForNextOperation(transaction);
+            var blockingTransactions = manager.acquireLocksForNextOperation(transaction);
+            if (blockingTransactions.isPresent()) {
+                assertSame(BLOCKED, transaction.getStatus());
+                return;
+            }
+            // Add locks
             locks.addAll(manager.getLocksHeldBy(transaction));
+            // Release locks and finish
+            locks.forEach(lock -> manager.unsetLock(lock, transaction));
+            // Finish transaction
+            manager.commit(transaction).forEach(transaction2 -> {
+                if (transaction != transaction2) {
+                    transaction2.setToRunning();
+                }
+            });
         }
     }
 

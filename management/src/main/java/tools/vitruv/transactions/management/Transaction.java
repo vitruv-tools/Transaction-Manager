@@ -50,9 +50,9 @@ public class Transaction<Element> {
      * Sets a {@code STARTED} transaction to {@code RUNNING}.
      */
     public void setToRunning() {
-        checkState(status == TransactionStatus.STARTED
-            || status == TransactionStatus.BLOCKED,
-            "Can only set a started or blocked transaction to running!");
+        checkState(status == TransactionStatus.STARTED || status == TransactionStatus.BLOCKED,
+            "Can only set a started or blocked transaction to running, but this transaction is %s!",
+            status);
         status = TransactionStatus.RUNNING;
     }
 
