@@ -1,3 +1,5 @@
+import lombok.Getter;
+import lombok.SneakyThrows;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.util.EcoreUtil;
@@ -9,10 +11,9 @@ import tools.vitruv.change.composite.description.impl.TransactionalChangeImpl;
 import tools.vitruv.change.testutils.metamodels.AllElementTypesCreators;
 import tools.vitruv.transactions.management.locking.*;
 
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
+import java.util.*;
 
+import static java.lang.Thread.sleep;
 import static org.junit.jupiter.api.Assertions.*;
 import static tools.vitruv.transactions.management.TransactionStatus.COMMITED;
 import static tools.vitruv.transactions.management.TransactionStatus.STARTED;
@@ -419,6 +420,66 @@ public class LockingTest {
                 CommonCreatorClasses.getIdentifiedRemoveEReferenceChange(),
                 transactionThatIsBlocked.peekNextOperation())
         );
+    }
+
+    @Test
+    void testMultipleLockCorrectness() throws InterruptedException{
+        var numberOfThreads = 64;
+        // Create Runnables
+        var runnables = new ArrayList<LockRequestingRunnable>();
+        for (int i = 0; i < numberOfThreads; i++) {
+            runnables.add(new LockRequestingRunnable(lockManager));
+        }
+        // Start threads and wait for join
+        var threads = new ArrayList<Thread>();
+        for (int i = 0; i < numberOfThreads; i++) {
+            threads.add(new Thread(runnables.get(i), "LockRequestingRunnable " + i));
+        }
+        threads.forEach(Thread::start);
+        for (var thread: threads) {
+            try {
+                thread.join();
+            }
+            catch (InterruptedException e) {
+                throw e;
+            }
+        }
+
+        // Exactly one runnable has locks at all.
+        var lockingRunnables = runnables.stream()
+            .filter(runnable -> !runnable.locks.isEmpty())
+            .toList();
+        assertEquals(1, lockingRunnables.size());
+    }
+
+    private static class LockRequestingRunnable implements Runnable {
+        @Getter
+        private final Set<Lock<EObject>> locks = new HashSet<>();
+        private final LockManager<EObject> manager;
+
+        LockRequestingRunnable(LockManager<EObject> manager) {
+            this.manager = manager;
+        }
+
+        @Override
+        public void run() {
+            try {
+                var waitInMs = new Random().nextInt(50);
+                System.out.println("Waiting for " + waitInMs + " milliseconds");
+                sleep(waitInMs);
+            }
+            catch (InterruptedException ignored) {}
+            var attributeChange = CommonCreatorClasses.getRootIntegerReplaceSingleValuedEAttributeChange(
+                CommonCreatorClasses.ROOT
+            );
+            var transaction = manager.submitTransaction(new TransactionalChangeImpl<>(
+                List.of(attributeChange)
+            ));
+            transaction.setToRunning();
+            // Request locks
+            manager.acquireLocksForNextOperation(transaction);
+            locks.addAll(manager.getLocksHeldBy(transaction));
+        }
     }
 
     /**

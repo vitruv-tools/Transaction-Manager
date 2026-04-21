@@ -48,10 +48,13 @@ public class C2PLScheduler extends AbstractScheduler<EObject> {
         var actualChange = new TransactionalChangeImpl<>(
             transaction.getUnderlyingChange().getEChanges()
                 .stream()
-                .map(changeResolver::assignIds)
+                .map(changeResolver::assignIdsWithoutUpdatingResolver)
                 .toList()
         );
-        multiModelEnvironment.propagateChange(actualChange);
+
+        for (var eChange: actualChange.getEChanges()) {
+            changeResolver.resolveAndApplyForward(eChange);
+        }
     }
 
     /**

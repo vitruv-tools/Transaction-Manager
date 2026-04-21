@@ -92,6 +92,10 @@ public class C2PLSchedulerTest {
         return transactionalChange;
     }
 
+    private TransactionalChangeImpl<Uuid> convertFromEObjectVitruviusChange(VitruviusChange<EObject> originalChange) {
+        return null;
+    }
+
     /**
      * Tests that the C2PLScheduler applies one transaction correctly.
      *
@@ -109,8 +113,26 @@ public class C2PLSchedulerTest {
         scheduler.nextStep();
 
         var newRoot = getRoot();
+        // Second transaction: Create a new NonRoot and insert it.
+        NonRoot newNonRoot = AllElementTypesCreators.aet.NonRoot();
+        newNonRoot.setId("fools");
+        var transaction2 = new TransactionalChangeImpl<EObject>(
+            List.of(
+                CommonCreatorClasses.E_CHANGE_FACTORY
+                    .createCreateEObjectChange(newNonRoot),
+                CommonCreatorClasses.E_CHANGE_FACTORY
+                    .createInsertReferenceChange(
+                        newRoot,
+                        AllElementTypesPackage.eINSTANCE.getRoot_MultiValuedContainmentEReference(),
+                        newNonRoot,
+                        0
+                    )
+            )
+        );
 
         assertEquals(42, newRoot.getSingleValuedEAttribute());
+        scheduler.admitTransaction(transaction2);
+        scheduler.nextStep();
     }
 
     private @NonNull Root getRoot() {
