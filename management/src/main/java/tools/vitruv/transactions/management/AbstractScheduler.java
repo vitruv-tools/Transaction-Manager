@@ -1,6 +1,5 @@
 package tools.vitruv.transactions.management;
 
-import lombok.Getter;
 import tools.vitruv.framework.vsum.VirtualModel;
 import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
 
@@ -12,6 +11,9 @@ import java.util.List;
  * @param <E>
  */
 public abstract class AbstractScheduler<E> implements Scheduler<E>{
+    /**
+     * The multi-model environment where transactions are applied on.
+     */
     protected final InternalVirtualModel multiModelEnvironment;
 
     @Override

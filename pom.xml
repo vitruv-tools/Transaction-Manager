@@ -32,6 +32,7 @@
   <!-- Modules -->
   <modules>
     <module>management</module>
+    <module>Vitruv-Case-Study-Transactions</module>
   </modules>
 
   <!-- Dependency Management -->

@@ -1,6 +1,9 @@
 package tools.vitruv.transactions.management.locking;
 
 import org.eclipse.emf.ecore.EObject;
+import tools.vitruv.change.atomic.EChange;
+import tools.vitruv.change.atomic.eobject.CreateEObject;
+import tools.vitruv.change.atomic.resolve.AtomicEChangeResolverHelper;
 import tools.vitruv.change.atomic.uuid.AtomicEChangeUuidResolver;
 import tools.vitruv.change.atomic.uuid.Uuid;
 import tools.vitruv.change.composite.description.VitruviusChange;
@@ -10,8 +13,7 @@ import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
 import tools.vitruv.transactions.management.AbstractScheduler;
 import tools.vitruv.transactions.management.Transaction;
 
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 
@@ -32,6 +34,11 @@ public class C2PLScheduler extends AbstractScheduler<EObject> {
      */
     private final ConcurrentLinkedQueue<Transaction<EObject>> transactionQueue
         = new ConcurrentLinkedQueue<>();
+    /**
+     * Temporary mapping for {@link EObject}s to {@link Uuid}s.
+     * Used during the application of Transactions to {@link AbstractScheduler#multiModelEnvironment}.
+     */
+    private final Map<EObject, Uuid> temporaryMapping = new HashMap<>();
 
     /**
      * Creates a new {@link C2PLScheduler}.
@@ -48,13 +55,45 @@ public class C2PLScheduler extends AbstractScheduler<EObject> {
         var actualChange = new TransactionalChangeImpl<>(
             transaction.getUnderlyingChange().getEChanges()
                 .stream()
-                .map(changeResolver::assignIdsWithoutUpdatingResolver)
+                .map(this::assignUuidToEChange)
                 .toList()
         );
 
         for (var eChange: actualChange.getEChanges()) {
             changeResolver.resolveAndApplyForward(eChange);
         }
+    }
+
+    /**
+     * Assigns a {@link Uuid}s to {@code resolvedChange}.
+     * If the base resolver used by the {@link AbstractScheduler#multiModelEnvironment} does not
+     * have a mapping for {@code resolvedChange}, compute a mapping locally.
+     *
+     * @param resolvedChange - {@link EChange}
+     * @return {@link EChange}
+     */
+    private EChange<Uuid> assignUuidToEChange(EChange<EObject> resolvedChange) {
+        var baseResolver = multiModelEnvironment.getUuidResolver();
+        return AtomicEChangeResolverHelper.resolveChange(
+            resolvedChange,
+            eObject -> {
+                if (baseResolver.hasUuid(eObject)) {
+                    return baseResolver.getUuid(eObject);
+                }
+                if (temporaryMapping.containsKey(eObject)) {
+                    return temporaryMapping.get(eObject);
+                }
+                if (resolvedChange instanceof CreateEObject<EObject> createEObject
+                    && createEObject.getAffectedElement() == eObject) {
+                    var newUuid = baseResolver.generateUuid(eObject);
+                    temporaryMapping.put(eObject, newUuid);
+                    return newUuid;
+                }
+                throw new IllegalArgumentException(
+                    String.format("Failed to assign a Uuid to %s", eObject));
+            },
+            (resource) -> baseResolver.getResource(resource.getURI())
+        );
     }
 
     /**
