@@ -6,8 +6,8 @@ import tools.vitruv.change.atomic.eobject.CreateEObject;
 import tools.vitruv.change.atomic.resolve.AtomicEChangeResolverHelper;
 import tools.vitruv.change.atomic.uuid.AtomicEChangeUuidResolver;
 import tools.vitruv.change.atomic.uuid.Uuid;
+import tools.vitruv.change.atomic.uuid.UuidResolver;
 import tools.vitruv.change.composite.description.VitruviusChange;
-import tools.vitruv.change.composite.description.impl.TransactionalChangeImpl;
 import tools.vitruv.framework.vsum.VirtualModel;
 import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
 import tools.vitruv.transactions.management.AbstractScheduler;
@@ -35,6 +35,10 @@ public class C2PLScheduler extends AbstractScheduler<EObject> {
     private final ConcurrentLinkedQueue<Transaction<EObject>> transactionQueue
         = new ConcurrentLinkedQueue<>();
     /**
+     * Resolver required for applying atomic {@link EChange}s.
+     */
+    private final UuidResolver baseUuidResolver;
+    /**
      * Temporary mapping for {@link EObject}s to {@link Uuid}s.
      * Used during the application of Transactions to {@link AbstractScheduler#multiModelEnvironment}.
      */
@@ -47,21 +51,19 @@ public class C2PLScheduler extends AbstractScheduler<EObject> {
      */
     public C2PLScheduler(InternalVirtualModel multiModelEnvironment) {
         super(multiModelEnvironment);
+        this.baseUuidResolver = multiModelEnvironment.getUuidResolver();
     }
 
     @Override
     protected void applyTransactionOnEnvironment(Transaction<EObject> transaction) {
-        var changeResolver = new AtomicEChangeUuidResolver(multiModelEnvironment.getUuidResolver());
-        var actualChange = new TransactionalChangeImpl<>(
-            transaction.getUnderlyingChange().getEChanges()
-                .stream()
-                .map(this::assignUuidToEChange)
-                .toList()
-        );
-
-        for (var eChange: actualChange.getEChanges()) {
-            changeResolver.resolveAndApplyForward(eChange);
+        var changeResolver = new AtomicEChangeUuidResolver(baseUuidResolver);
+        while (transaction.hasExecutableOperations()) {
+            var eChange = transaction.getNextOperationForExecution();
+            var unresolvedChange = assignUuidToEChange(eChange);
+            changeResolver.resolveAndApplyForward(unresolvedChange);
+            observers.forEach(observer -> observer.observeExecutionOf(eChange, transaction));
         }
+        temporaryMapping.clear();
     }
 
     /**
@@ -73,26 +75,25 @@ public class C2PLScheduler extends AbstractScheduler<EObject> {
      * @return {@link EChange}
      */
     private EChange<Uuid> assignUuidToEChange(EChange<EObject> resolvedChange) {
-        var baseResolver = multiModelEnvironment.getUuidResolver();
         return AtomicEChangeResolverHelper.resolveChange(
             resolvedChange,
             eObject -> {
-                if (baseResolver.hasUuid(eObject)) {
-                    return baseResolver.getUuid(eObject);
+                if (baseUuidResolver.hasUuid(eObject)) {
+                    return baseUuidResolver.getUuid(eObject);
                 }
                 if (temporaryMapping.containsKey(eObject)) {
                     return temporaryMapping.get(eObject);
                 }
                 if (resolvedChange instanceof CreateEObject<EObject> createEObject
                     && createEObject.getAffectedElement() == eObject) {
-                    var newUuid = baseResolver.generateUuid(eObject);
+                    var newUuid = baseUuidResolver.generateUuid(eObject);
                     temporaryMapping.put(eObject, newUuid);
                     return newUuid;
                 }
                 throw new IllegalArgumentException(
                     String.format("Failed to assign a Uuid to %s", eObject));
             },
-            (resource) -> baseResolver.getResource(resource.getURI())
+            (resource) -> baseUuidResolver.getResource(resource.getURI())
         );
     }
 
@@ -134,7 +135,7 @@ public class C2PLScheduler extends AbstractScheduler<EObject> {
 
         // Attempt to preclaim all locks
         Optional<Set<Transaction<EObject>>> blockingTransactions;
-        while (transactionToExecute.hasOperationsToExecute()) {
+        while (transactionToExecute.wantsToAcquireLocks()) {
             blockingTransactions = lockManager.acquireLocksForNextOperation(transactionToExecute);
             if (blockingTransactions.isPresent()) {
                 handleBlock(transactionToExecute, blockingTransactions.get());
@@ -144,10 +145,6 @@ public class C2PLScheduler extends AbstractScheduler<EObject> {
 
         // Lock request succeeded, execute all operations
         applyTransactionOnEnvironment(transactionToExecute);
-        for (var eChange: transactionToExecute.getUnderlyingChange().getEChanges()) {
-            observers.forEach(observer -> observer.observeExecutionOf(eChange, transactionToExecute));
-        }
-
 
         // Release all locks
         releaseAllLocksOf(transactionToExecute);
@@ -168,7 +165,7 @@ public class C2PLScheduler extends AbstractScheduler<EObject> {
     private void handleBlock(Transaction<EObject> transactionToExecute, Set<Transaction<EObject>> blockingTransactions) {
         releaseAllLocksOf(transactionToExecute);
         // Go back to the start of the transaction, do not execute anything
-        while (transactionToExecute.goToPreviousOperation()) {}
+        while (transactionToExecute.goToPreviousOperationForExecutionCheck()) {}
         observers.forEach(observer -> observer.observeBlockOf(transactionToExecute, blockingTransactions));
     }
 

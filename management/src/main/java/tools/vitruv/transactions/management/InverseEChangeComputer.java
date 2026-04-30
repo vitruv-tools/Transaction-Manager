@@ -6,6 +6,7 @@ import tools.vitruv.change.atomic.EChange;
 import tools.vitruv.change.atomic.TypeInferringAtomicEChangeFactory;
 import tools.vitruv.change.atomic.eobject.CreateEObject;
 import tools.vitruv.change.atomic.eobject.DeleteEObject;
+import tools.vitruv.change.atomic.eobject.EobjectFactory;
 import tools.vitruv.change.atomic.feature.attribute.ReplaceSingleValuedEAttribute;
 import tools.vitruv.change.atomic.feature.reference.InsertEReference;
 import tools.vitruv.change.atomic.feature.reference.RemoveEReference;
@@ -24,16 +25,20 @@ public class InverseEChangeComputer {
      * @return {@link EChange}
      * @param <E> Type of the elements.
      */
-    public static <E extends EObject> EChange<E> computeInverseOf(EChange<E> input) {
+    public static <E> EChange<E> computeInverseOf(EChange<E> input) {
         return switch (input) {
             case CreateEObject<E> create:
-                yield eChangeFactory.createDeleteEObjectChange(
-                    create.getAffectedElement()
-                );
+            {
+                var newDeleteEObjectChange = EobjectFactory.eINSTANCE.createDeleteEObject();
+                newDeleteEObjectChange.setAffectedElement(create.getAffectedElement());
+                yield (EChange<E>) newDeleteEObjectChange;
+            }
             case DeleteEObject<E> delete:
-                yield eChangeFactory.createCreateEObjectChange(
-                    delete.getAffectedElement()
-                );
+            {
+                var newCreateEObjectChange = EobjectFactory.eINSTANCE.createCreateEObject();
+                newCreateEObjectChange.setAffectedElement(delete.getAffectedElement());
+                yield (EChange<E>) newCreateEObjectChange;
+            }
             case ReplaceSingleValuedEAttribute<E, ?> replace:
                 yield eChangeFactory.createReplaceSingleAttributeChange(
                     replace.getAffectedElement(),
@@ -56,7 +61,7 @@ public class InverseEChangeComputer {
                     remove.getIndex()
                 );
             default:
-                yield null;
+                throw new IllegalArgumentException(String.format("Change type %s is unknown!", input.eClass()));
         };
     }
 }

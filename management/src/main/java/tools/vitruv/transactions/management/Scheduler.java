@@ -13,7 +13,7 @@ import tools.vitruv.framework.vsum.VirtualModel;
  */
 public interface Scheduler<E> {
     /**
-     * Returns the environment for transactions are scheduled.
+     * Returns the environment for which transactions are scheduled.
      *
      * @return multiModelEnvironment - {@link VirtualModel}
      */

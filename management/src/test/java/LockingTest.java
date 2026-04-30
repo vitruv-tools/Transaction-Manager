@@ -1,4 +1,6 @@
+import allElementTypes.Root;
 import lombok.Getter;
+import org.eclipse.emf.common.command.Command;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.util.EcoreUtil;
@@ -6,8 +8,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import tools.vitruv.change.atomic.EChange;
+import tools.vitruv.change.atomic.command.internal.ApplyEChangeSwitch;
+import tools.vitruv.change.atomic.eobject.CreateEObject;
 import tools.vitruv.change.composite.description.impl.TransactionalChangeImpl;
 import tools.vitruv.change.testutils.metamodels.AllElementTypesCreators;
+import tools.vitruv.transactions.management.InverseEChangeComputer;
 import tools.vitruv.transactions.management.Transaction;
 import tools.vitruv.transactions.management.locking.*;
 
@@ -127,7 +132,7 @@ public class LockingTest {
         // Submit transaction
         var transaction = lockManager.submitTransaction(vitruviusChange);
         assertEquals(STARTED, transaction.getStatus());
-        assertTrue(transaction.hasOperationsToExecute());
+        assertTrue(transaction.wantsToAcquireLocks());
         // Run transaction
         transaction.setToRunning();
 
@@ -135,7 +140,7 @@ public class LockingTest {
             lockManager.acquireLocksForNextOperation(transaction);
         }
         // All operations have been processed
-        assertFalse(transaction.hasOperationsToExecute());
+        assertFalse(transaction.wantsToAcquireLocks());
 
         // Check locks
         var locksHeldByTransaction = lockManager.getLocksHeldBy(transaction);
@@ -375,7 +380,7 @@ public class LockingTest {
 
         var transaction = lockManager.submitTransaction(vitruviusChange);
         // Started transactions cannot return operations, only running ones
-        assertThrows(IllegalStateException.class, transaction::peekNextOperation);
+        assertThrows(IllegalStateException.class, transaction::peekNextOperationForExecutionChecking);
 
         // Set transaction to running
         transaction.setToRunning();
@@ -383,7 +388,7 @@ public class LockingTest {
         assertThrows(IllegalStateException.class, transaction::setToRunning);
         assertThrows(IllegalStateException.class, transaction::setToCommited);
         // Peek operation, allow double peek
-        assertEquals(transaction.peekNextOperation(), transaction.peekNextOperation());
+        assertEquals(transaction.peekNextOperationForExecutionChecking(), transaction.peekNextOperationForExecutionChecking());
     }
 
     @Test
@@ -411,13 +416,13 @@ public class LockingTest {
 
         // Now pretend that we need to release locks
         transactionThatIsBlocked.setToBlocked();
-        assertTrue(transactionThatIsBlocked.goToPreviousOperation());
-        assertTrue(transactionThatIsBlocked.goToPreviousOperation());
-        assertFalse(transactionThatIsBlocked.goToPreviousOperation());
+        assertTrue(transactionThatIsBlocked.goToPreviousOperationForExecutionCheck());
+        assertTrue(transactionThatIsBlocked.goToPreviousOperationForExecutionCheck());
+        assertFalse(transactionThatIsBlocked.goToPreviousOperationForExecutionCheck());
         assertTrue(
             EcoreUtil.equals(
                 CommonCreatorClasses.getIdentifiedRemoveEReferenceChange(),
-                transactionThatIsBlocked.peekNextOperation())
+                transactionThatIsBlocked.peekNextOperationForExecutionChecking())
         );
     }
 
@@ -514,9 +519,67 @@ public class LockingTest {
     }
 
     /**
+     * Checks the behavior of computing inverse operations.
+     * Inverse commands should compute the expected inverse commands,
+     * ignoring the editing domain.
+     */
+    @Test
+    void testInverseChangeResults() {
+        var createEChange = CommonCreatorClasses.getCreateRootEObjectChange();
+        checkCorrectBehaviorOfInversion(createEChange);
+        Root root = CommonCreatorClasses.ROOT;
+        var deleteEChange = CommonCreatorClasses.getDeleteRootEObjectChange(root);
+        checkCorrectBehaviorOfInversion(deleteEChange);
+
+        var addReferenceEChange = CommonCreatorClasses.getIdentifiedInsertReferenceChange();
+        checkCorrectBehaviorOfInversion(addReferenceEChange);
+        var removeReferenceEChange = CommonCreatorClasses.getIdentifiedRemoveEReferenceChange();
+        checkCorrectBehaviorOfInversion(removeReferenceEChange);
+
+        var setAttributeEChange = CommonCreatorClasses.getRootIntegerReplaceSingleValuedEAttributeChange(root);
+        checkCorrectBehaviorOfInversion(setAttributeEChange);
+
+    }
+
+    private static void checkCorrectBehaviorOfInversion(EChange<EObject> eChange) {
+        var expectedInverseCommands = ApplyEChangeSwitch.getCommands(eChange, false);
+        var inverseCreateEChange = InverseEChangeComputer.computeInverseOf(eChange);
+        var actualInverseCommands = ApplyEChangeSwitch.getCommands(inverseCreateEChange, true);
+
+        var labelsExpected = expectedInverseCommands.stream().map(Command::getLabel).toList();
+        var labelsActual = actualInverseCommands.stream().map(Command::getLabel).toList();
+        var objectsExpected = expectedInverseCommands.stream().map(Command::getAffectedObjects).toList();
+        var objectsActual = actualInverseCommands.stream().map(Command::getAffectedObjects).toList();
+        var descriptionsExpected = expectedInverseCommands.stream().map(Command::getDescription).toList();
+        var descriptionsActual = actualInverseCommands.stream().map(Command::getDescription).toList();
+        var resultExpected = expectedInverseCommands.stream().map(Command::getResult).toList();
+        var resultActual = actualInverseCommands.stream().map(Command::getResult).toList();
+
+        assertEquals(labelsExpected, labelsActual);
+        assertEquals(objectsExpected, objectsActual);
+        assertEquals(descriptionsExpected, descriptionsActual);
+        assertEquals(resultExpected, resultActual);
+    }
+
+    /**
+     * Checks the behavior of aborting transactions:
+     * <ol>
+     *     <li>They may not acquire locks, only release them</li>
+     *     <li>Aborting transactions may only be aborted when all operations have been undone</li>
+     *     <li>Aborting transactions can only be aborted</li>
+     *     <li>Previously held locks are released after abort</li>
+     * </ol>
+     */
+    @Test
+    void testLockingBehaviorOfAbortingTransactions() {
+        // Build transaction
+        fail("TODO");
+    }
+
+    /**
      * Test that some locks exist in {@code heldLocks}.
      */
-    <E> void assertLock(Collection<Lock<E>> heldLocks,
+    static <E> void assertLock(Collection<Lock<E>> heldLocks,
                         E element, LockMode mode, EStructuralFeature feature) {
         assertTrue(heldLocks.stream()
             .filter(lock -> lock.getMode().equals(mode) && lock.getRoot() == element)

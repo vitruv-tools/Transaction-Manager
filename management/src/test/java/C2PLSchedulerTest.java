@@ -32,7 +32,7 @@ import java.util.List;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class C2PLSchedulerTest {
     private InternalVirtualModel environment;
@@ -132,7 +132,9 @@ public class C2PLSchedulerTest {
 
         assertEquals(42, newRoot.getSingleValuedEAttribute());
         scheduler.admitTransaction(transaction2);
+        assertTrue(newRoot.getMultiValuedContainmentEReference().isEmpty());
         scheduler.nextStep();
+        assertFalse(newRoot.getMultiValuedContainmentEReference().isEmpty());
     }
 
     private @NonNull Root getRoot() {
@@ -188,7 +190,8 @@ public class C2PLSchedulerTest {
 
         // Apply transaction 1
         scheduler.nextStep();
-        // Apply transaction 2
+        // Apply transaction 2, deal with failure.
+        // NonRoot -> check nonRoot_Value
         scheduler.nextStep();
     }
 

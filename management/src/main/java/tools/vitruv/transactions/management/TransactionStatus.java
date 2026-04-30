@@ -14,6 +14,7 @@ public enum TransactionStatus {
     RUNNING,
     /**
      * Transaction has been blocked due to another transaction.
+     * It cannot execute operations because it is waiting for checks for them to succeed.
      */
     BLOCKED,
     /**
@@ -24,5 +25,9 @@ public enum TransactionStatus {
      * Transaction has encountered an error and needs to be aborted.
      * Some operations may have been executed already.
      */
-    ABORTING
+    ABORTING,
+    /**
+     * Transactions has been aborted.
+     */
+    ABORTED
 }

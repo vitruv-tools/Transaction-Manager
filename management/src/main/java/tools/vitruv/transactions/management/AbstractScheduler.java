@@ -21,6 +21,9 @@ public abstract class AbstractScheduler<E> implements Scheduler<E>{
         return multiModelEnvironment;
     }
 
+    /**
+     * Observers for scheduling events.
+     */
     protected final List<SchedulingEventObserver<E>> observers
         = new LinkedList<>();
 

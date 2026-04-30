@@ -64,7 +64,7 @@ public class LockManager<E> {
         checkArgument(!data.isUnlocking(), "Transaction has started to unlock; it must not acquire further locks!");
         checkArgument(transaction.getStatus() == TransactionStatus.RUNNING, "Cannot acquire locks if the transaction is not running!");
         // Peek operation
-        var operation = transaction.peekNextOperation();
+        var operation = transaction.peekNextOperationForExecutionChecking();
         // Compute locks
         var locksToAcquire = LockComputer.computeLocksFor(operation);
 
@@ -193,7 +193,7 @@ public class LockManager<E> {
      */
     public synchronized Collection<Transaction<E>> commit(Transaction<E> transaction) {
         checkArgument(transaction.getStatus() == TransactionStatus.RUNNING, "Only running transactions can be committed!");
-        checkArgument(!transaction.hasOperationsToExecute(), "Only transactions that have no more operations can be committed!");
+        checkArgument(!transaction.wantsToAcquireLocks(), "Only transactions that have no more operations can be committed!");
         var data = transactionData.get(transaction);
         checkArgument(data.getHeldLocks().isEmpty(), "Only transactions that do not have locks can be commited!");
 
@@ -218,7 +218,7 @@ public class LockManager<E> {
      * @return {@link List}
      */
     public List<Lock<E>> computeNextLocksFor(Transaction<E> transaction) {
-        var nextOperation = transaction.peekNextOperation();
+        var nextOperation = transaction.peekNextOperationForExecutionChecking();
         return LockComputer.computeLocksFor(nextOperation);
     }
 
