@@ -1,7 +1,7 @@
 package tools.vitruv.transactions.management.locking;
 
 /**
- * Lock mode, how a {@link Lock should be treated}.
+ * Lock mode, how a {@link Lock} should be treated.
  */
 public enum LockMode implements Comparable<LockMode> {
     /**

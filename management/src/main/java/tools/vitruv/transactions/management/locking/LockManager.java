@@ -1,6 +1,8 @@
 package tools.vitruv.transactions.management.locking;
 
 import java.util.*;
+
+import org.jspecify.annotations.NonNull;
 import tools.vitruv.change.atomic.EChange;
 
 import tools.vitruv.change.composite.description.VitruviusChange;
@@ -163,7 +165,7 @@ public class LockManager<E> {
      * @param lock - {@link Lock}
      * @param lockHolder - {@link Transaction}
      */
-    public synchronized void unsetLock(Lock<E> lock, Transaction<E> lockHolder) {
+    public synchronized void releaseLock(Lock<E> lock, Transaction<E> lockHolder) {
         // Transaction must be registered
         var data = transactionData.get(lockHolder);
         checkArgument(data != null, "Transaction is not currently active!");
@@ -194,11 +196,13 @@ public class LockManager<E> {
     public synchronized Collection<Transaction<E>> commit(Transaction<E> transaction) {
         checkArgument(transaction.getStatus() == TransactionStatus.RUNNING, "Only running transactions can be committed!");
         checkArgument(!transaction.wantsToAcquireLocks(), "Only transactions that have no more operations can be committed!");
-        var data = transactionData.get(transaction);
-        checkArgument(data.getHeldLocks().isEmpty(), "Only transactions that do not have locks can be commited!");
-
+        checkForReleaseOfAllLocks(transaction);
         // Mark commit
         transaction.setToCommited();
+        return unblockTransactionsBlockedBy(transaction);
+    }
+
+    private List<Transaction<E>> unblockTransactionsBlockedBy(Transaction<E> transaction) {
         // Cleanup
         transactionData.remove(transaction);
         // Collect unblocked transactions
@@ -208,6 +212,30 @@ public class LockManager<E> {
             .filter(entry -> entry.getValue().unblock(transaction))
             .map(Map.Entry::getKey)
             .toList();
+    }
+
+    private void checkForReleaseOfAllLocks(Transaction<E> transaction) {
+        var data = transactionData.get(transaction);
+        checkArgument(data.getHeldLocks().isEmpty(), "Only transactions that do not have locks can be commited!");
+    }
+
+    /**
+     * Aborts an aborting {@code transaction}, assuming that all its executed operations have been inverted
+     * and all its locks have been released.
+     * <p>
+     * Upon that point, we update the {@code waitsForGraph} relation, and return all
+     * transactions that are now unblocked.
+     *
+     * @param transaction - {@link Transaction}
+     * @return {@link Collection}
+     */
+    public synchronized Collection<Transaction<E>> abort(Transaction<E> transaction) {
+        checkArgument(transaction.getStatus() == TransactionStatus.ABORTING, "Only aborting transactions may be aborted!");
+        checkArgument(!transaction.hasOperationsToInvert(), "Transaction still has operations to invert!");
+        checkForReleaseOfAllLocks(transaction);
+        // Mark abort
+        transaction.setToAborted();
+        return unblockTransactionsBlockedBy(transaction);
     }
 
     /**

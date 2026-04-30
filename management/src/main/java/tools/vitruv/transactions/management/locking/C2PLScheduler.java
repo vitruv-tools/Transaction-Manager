@@ -171,6 +171,6 @@ public class C2PLScheduler extends AbstractScheduler<EObject> {
 
     private void releaseAllLocksOf(Transaction<EObject> transaction) {
         var locksToRelease = lockManager.getLocksHeldBy(transaction);
-        locksToRelease.forEach(lock -> lockManager.unsetLock(lock, transaction));
+        locksToRelease.forEach(lock -> lockManager.releaseLock(lock, transaction));
     }
 }

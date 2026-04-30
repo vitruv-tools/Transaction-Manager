@@ -90,6 +90,9 @@ public class Transaction<Element> {
         status = TransactionStatus.ABORTING;
     }
 
+    /**
+     * Sets an {@code ABORTING} transaction to {@code ABORTED}.
+     */
     public void setToAborted() {
         checkState(status == TransactionStatus.ABORTING, "Can only abort from ABORTING!");
         checkState(!hasOperationsToInvert(), "Some operations still need to be inverted!");
@@ -183,7 +186,11 @@ public class Transaction<Element> {
         return operationToExecute;
     }
 
-    public EChange<Element> getNextInverseOpration() {
+    /**
+     * Returns the next operation/{@link EChange} to invert.
+     * @return {@link EChange}.
+     */
+    public EChange<Element> getNextInverseOperation() {
         checkState(status == TransactionStatus.ABORTING,
             "Can only invert operations when aborting a transaction!");
         checkState(hasOperationsToInvert(),

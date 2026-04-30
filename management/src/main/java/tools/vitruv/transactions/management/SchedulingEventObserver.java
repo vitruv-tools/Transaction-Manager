@@ -11,8 +11,8 @@ import java.util.Collection;
  *     <li>Admitting a new transaction,</li>
  *     <li>Setting a transaction to running,</li>
  *     <li>Blocking a transaction,</li>
- *     <li>Executing one step of a transaction,</li>
- *     <li>Commiting a transaction.</li>
+ *     <li>Executing and undoing one step of a transaction,</li>
+ *     <li>Commiting or aborting a transaction.</li>
  * </ol>
  * @param <E>
  */
@@ -26,4 +26,8 @@ public interface SchedulingEventObserver<E> {
     void observeBlockOf(Transaction<E> blockedTransaction, Collection<Transaction<E>> blockingTransactions);
 
     void observeCommit(Transaction<E> commited);
+
+    void observeUndo(EChange<E> step, Transaction<E> forTransaction);
+
+    void observeAbort(Transaction<E> aborting);
 }

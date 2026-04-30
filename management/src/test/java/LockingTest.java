@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test;
 
 import tools.vitruv.change.atomic.EChange;
 import tools.vitruv.change.atomic.command.internal.ApplyEChangeSwitch;
-import tools.vitruv.change.atomic.eobject.CreateEObject;
 import tools.vitruv.change.composite.description.impl.TransactionalChangeImpl;
 import tools.vitruv.change.testutils.metamodels.AllElementTypesCreators;
 import tools.vitruv.transactions.management.InverseEChangeComputer;
@@ -151,7 +150,7 @@ public class LockingTest {
 
         // Unlock everything
         for (var lock: locksHeldByTransaction) {
-            lockManager.unsetLock(lock, transaction);
+            lockManager.releaseLock(lock, transaction);
         }
         // Commit
         lockManager.commit(transaction);
@@ -252,7 +251,7 @@ public class LockingTest {
 
         // Release each lock for the first operation
         for (var lockOfT1Op1: currentLocks) {
-            lockManager.unsetLock(lockOfT1Op1, transaction1);
+            lockManager.releaseLock(lockOfT1Op1, transaction1);
         }
         // Transaction 1 must not hold locks now
         assertTrue(lockManager.getLocksHeldBy(transaction1).isEmpty());
@@ -572,8 +571,46 @@ public class LockingTest {
      */
     @Test
     void testLockingBehaviorOfAbortingTransactions() {
-        // Build transaction
-        fail("TODO");
+        var root = CommonCreatorClasses.ROOT;
+
+        var transactionToAbort = lockManager.submitTransaction(
+            new TransactionalChangeImpl<>(
+                List.of(
+                    CommonCreatorClasses.getRootIntegerReplaceSingleValuedEAttributeChange(root),
+                    CommonCreatorClasses.getIdentifiedInsertReferenceChange(),
+                    CommonCreatorClasses.getIdentifiedRemoveEReferenceChange()
+                )
+            )
+        );
+        transactionToAbort.setToRunning();
+        // Acquire locks for the first two operations
+        assertTrue(lockManager.acquireLocksForNextOperation(transactionToAbort).isEmpty());
+        assertTrue(lockManager.acquireLocksForNextOperation(transactionToAbort).isEmpty());
+        transactionToAbort.getNextOperationForExecution();
+        transactionToAbort.getNextOperationForExecution();
+
+        // Now abort transaction
+        transactionToAbort.setToAborting();
+        // Check state transitions
+        assertThrows(IllegalStateException.class, transactionToAbort::setToBlocked);
+        assertThrows(IllegalStateException.class, transactionToAbort::setToCommited);
+        assertThrows(IllegalStateException.class, transactionToAbort::setToRunning);
+        // Acquiring locks should fail
+        assertThrows(IllegalArgumentException.class,
+            () -> lockManager.acquireLocksForNextOperation(transactionToAbort));
+        // Executing operations should fail
+        assertThrows(IllegalStateException.class, transactionToAbort::getNextOperationForExecution);
+        // Abort should fail at this point in time
+        assertThrows(IllegalStateException.class, transactionToAbort::setToAborted);
+
+        // We should be able to "undo" two operations, no more
+        transactionToAbort.getNextInverseOperation();
+        transactionToAbort.getNextInverseOperation();
+        assertThrows(IllegalStateException.class, transactionToAbort::getNextInverseOperation);
+        // Unlock and Abort
+        lockManager.getLocksHeldBy(transactionToAbort).forEach(lock -> lockManager.releaseLock(lock, transactionToAbort));
+        lockManager.abort(transactionToAbort);
+        // Check that transaction has been aborted.
     }
 
     /**
