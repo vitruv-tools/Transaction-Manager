@@ -1,11 +1,8 @@
 import allElementTypes.AllElementTypesPackage;
 import allElementTypes.NonRoot;
 import allElementTypes.Root;
-import edu.kit.ipd.sdq.commons.util.java.Pair;
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EObject;
-import org.eclipse.emf.ecore.resource.ResourceSet;
-import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -23,14 +20,12 @@ import tools.vitruv.framework.vsum.VirtualModel;
 import tools.vitruv.framework.vsum.VirtualModelBuilder;
 import tools.vitruv.change.testutils.*;
 import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
-import tools.vitruv.framework.vsum.internal.VirtualModelImpl;
 import tools.vitruv.transactions.management.locking.C2PLScheduler;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Consumer;
-import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -110,7 +105,7 @@ public class C2PLSchedulerTest {
 
         // Apply transaction, check that it has been applied correctly.
         scheduler.admitTransaction(getFirstChange());
-        scheduler.nextStep();
+        scheduler.runNextStep();
 
         var newRoot = getRoot();
         // Second transaction: Create a new NonRoot and insert it.
@@ -133,7 +128,7 @@ public class C2PLSchedulerTest {
         assertEquals(42, newRoot.getSingleValuedEAttribute());
         scheduler.admitTransaction(transaction2);
         assertTrue(newRoot.getMultiValuedContainmentEReference().isEmpty());
-        scheduler.nextStep();
+        scheduler.runNextStep();
         assertFalse(newRoot.getMultiValuedContainmentEReference().isEmpty());
     }
 
@@ -189,10 +184,10 @@ public class C2PLSchedulerTest {
         scheduler.admitTransaction(transaction2);
 
         // Apply transaction 1
-        scheduler.nextStep();
+        scheduler.runNextStep();
         // Apply transaction 2, deal with failure.
         // NonRoot -> check nonRoot_Value
-        scheduler.nextStep();
+        scheduler.runNextStep();
     }
 
     private TransactionalChangeImpl<EObject> createTransactionFrom(List<EChange<EObject>> originalChanges) {

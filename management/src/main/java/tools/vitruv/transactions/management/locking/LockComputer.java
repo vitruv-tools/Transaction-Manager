@@ -16,43 +16,43 @@ import java.util.List;
  */
 @UtilityClass
 public final class LockComputer {
-    /**
-     * Computes the required {@link Lock}s that an {@link EChange} requires.
-     *
-     * @param change - {@link EChange}
-     * @return {@link List}
-     */
-    public static <E> List<Lock<E>> computeLocksFor(EChange<E> change) {
-        if (change instanceof CreateEObject<E> c) {
-            return List.of(
-                new ElementLock<>(c.getAffectedElement(), LockMode.EXCLUSIVE)
-            );
-        }
-        if (change instanceof DeleteEObject<E> d) {
-            return List.of(
-                new ElementLock<>(d.getAffectedElement(), LockMode.EXCLUSIVE)
-            );
-        }
-        if (change instanceof ReplaceSingleValuedEAttribute<E, ?> s) {
-            return List.of(
-                new ElementLock<>(s.getAffectedElement(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
-                new FeatureLock<>(s.getAffectedElement(), s.getAffectedFeature())
-            );
-        }
-        if (change instanceof InsertEReference<E> a) {
-            return List.of(
-                new ElementLock<>(a.getAffectedElement(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
-                new ElementLock<>(a.getNewValue(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
-                new FeatureLock<>(a.getAffectedElement(), a.getAffectedFeature())
-            );
-        }
-        if (change instanceof RemoveEReference<E> d) {
-            return List.of(
-                new ElementLock<>(d.getAffectedElement(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
-                new ElementLock<>(d.getOldValue(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
-                new FeatureLock<>(d.getAffectedElement(), d.getAffectedFeature())
-            );
-        }
-        return List.of();
+  /**
+   * Computes the required {@link Lock}s that an {@link EChange} requires.
+   *
+   * @param change - {@link EChange}
+   * @return {@link List}
+   */
+  public static <E> List<Lock<E>> computeLocksFor(EChange<E> change) {
+    if (change instanceof CreateEObject<E> c) {
+      return List.of(
+          new ElementLock<>(c.getAffectedElement(), LockMode.EXCLUSIVE)
+      );
     }
+    if (change instanceof DeleteEObject<E> d) {
+      return List.of(
+          new ElementLock<>(d.getAffectedElement(), LockMode.EXCLUSIVE)
+      );
+    }
+    if (change instanceof ReplaceSingleValuedEAttribute<E, ?> s) {
+      return List.of(
+          new ElementLock<>(s.getAffectedElement(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
+          new FeatureLock<>(s.getAffectedElement(), s.getAffectedFeature())
+      );
+    }
+    if (change instanceof InsertEReference<E> a) {
+      return List.of(
+          new ElementLock<>(a.getAffectedElement(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
+          new ElementLock<>(a.getNewValue(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
+          new FeatureLock<>(a.getAffectedElement(), a.getAffectedFeature())
+      );
+    }
+    if (change instanceof RemoveEReference<E> d) {
+      return List.of(
+          new ElementLock<>(d.getAffectedElement(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
+          new ElementLock<>(d.getOldValue(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
+          new FeatureLock<>(d.getAffectedElement(), d.getAffectedFeature())
+      );
+    }
+    return List.of();
+  }
 }

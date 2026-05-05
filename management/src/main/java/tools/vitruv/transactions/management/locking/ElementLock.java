@@ -8,18 +8,18 @@ import org.eclipse.emf.ecore.EObject;
  */
 @EqualsAndHashCode(callSuper = true)
 public class ElementLock<Element> extends Lock<Element> {
-    /**
-     * Creates a new ElementLock on {@code root}.
-     *
-     * @param root - {@link EObject}
-     * @param mode - {@link LockMode}
-     */
-    public ElementLock(Element root, LockMode mode) {
-        super(root, mode);
-    }
+  /**
+   * Creates a new ElementLock on {@code root}.
+   *
+   * @param root - {@link EObject}
+   * @param mode - {@link LockMode}
+   */
+  public ElementLock(Element root, LockMode mode) {
+    super(root, mode);
+  }
 
-    @Override
-    public Lock<Element> convert(LockMode newMode) {
-        return new ElementLock<>(this.root, newMode);
-    }
+  @Override
+  public Lock<Element> convert(LockMode newMode) {
+    return new ElementLock<>(this.root, newMode);
+  }
 }
