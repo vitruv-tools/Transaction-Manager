@@ -1,5 +1,7 @@
 package tools.vitruv.transactions.management.locking;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -17,7 +19,7 @@ import tools.vitruv.framework.vsum.VirtualModel;
 import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
 import tools.vitruv.transactions.management.AbstractScheduler;
 import tools.vitruv.transactions.management.Transaction;
-
+import tools.vitruv.transactions.management.TransactionStatus;
 
 /**
  * A scheduler implementing the Conservative Two-Phase Locking (C2PL) algorithm.
@@ -65,7 +67,21 @@ public class C2PLScheduler extends AbstractScheduler<EObject> {
       changeResolver.resolveAndApplyForward(unresolvedChange);
       observers.forEach(observer -> observer.observeExecutionOf(eChange, transaction));
     }
-    temporaryMapping.clear();
+
+  }
+
+  private void abortAndUndoAllExecutedOperations(Transaction<EObject> transaction) {
+    // Abort, go back to the last successful operation
+    transaction.setToAborting();
+    transaction.getNextInverseOperation();
+
+    var changeResolver = new AtomicEChangeUuidResolver(baseUuidResolver);
+    while (transaction.hasOperationsToInvert()) {
+      var eChangeToInvert = transaction.getNextInverseOperation();
+      var unresolvedInverseChange = assignUuidToEChange(eChangeToInvert);
+      changeResolver.resolveAndApplyForward(unresolvedInverseChange);
+      observers.forEach(observer -> observer.observeUndo(eChangeToInvert, transaction));
+    }
   }
 
   /**
@@ -106,14 +122,15 @@ public class C2PLScheduler extends AbstractScheduler<EObject> {
    * @param change - {@link VitruviusChange}
    */
   @Override
-  public void admitTransaction(VitruviusChange<EObject> change) {
+  public Transaction<EObject> admitTransaction(VitruviusChange<EObject> change) {
     var newTransaction = lockManager.submitTransaction(change);
     transactionQueue.add(newTransaction);
     observers.forEach(observer -> observer.observeAdmission(newTransaction));
+    return newTransaction;
   }
 
   /**
-   * Runs the scheduling algorithm, with the following steps:
+   * Runs the scheduling algorithm, with the following steps.
    *
    * <ol>
    *     <li>Take the next queued transaction to execute.</li>
@@ -147,14 +164,27 @@ public class C2PLScheduler extends AbstractScheduler<EObject> {
     }
 
     // Lock request succeeded, execute all operations
-    applyTransactionOnEnvironment(transactionToExecute);
+    try {
+      applyTransactionOnEnvironment(transactionToExecute);
+    } catch (IllegalArgumentException | IllegalStateException e) {
+      // An operation failed to execute, undo the transaction
+      abortAndUndoAllExecutedOperations(transactionToExecute);
+    } finally {
+      // Release all locks
+      releaseAllLocksOf(transactionToExecute);
+      temporaryMapping.clear();
+    }
 
-    // Release all locks
-    releaseAllLocksOf(transactionToExecute);
-    // Commit, add all unblocked transactions to the waiting queue.
-    var unblockedTransactions = lockManager.commit(transactionToExecute);
+    // Finish, add all unblocked transactions to the waiting queue.
+    Collection<Transaction<EObject>> unblockedTransactions = new ArrayList<>();
+    if (transactionToExecute.getStatus() == TransactionStatus.RUNNING) {
+      unblockedTransactions.addAll(lockManager.commit(transactionToExecute));
+      observers.forEach(observer -> observer.observeCommit(transactionToExecute));
+    } else {
+      unblockedTransactions.addAll(lockManager.abort(transactionToExecute));
+      observers.forEach(observer -> observer.observeAbort(transactionToExecute));
+    }
     transactionQueue.addAll(unblockedTransactions);
-    observers.forEach(observer -> observer.observeCommit(transactionToExecute));
     return true;
   }
 

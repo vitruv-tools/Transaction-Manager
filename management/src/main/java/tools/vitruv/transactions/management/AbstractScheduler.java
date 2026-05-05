@@ -2,6 +2,7 @@ package tools.vitruv.transactions.management;
 
 import java.util.LinkedList;
 import java.util.List;
+import tools.vitruv.change.atomic.EChange;
 import tools.vitruv.framework.vsum.VirtualModel;
 import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
 
@@ -43,6 +44,10 @@ public abstract class AbstractScheduler<E> implements Scheduler<E> {
    * and {@link AbstractScheduler#multiModelEnvironment}.
    *
    * @param transaction - {@link Transaction}
+   * @throws IllegalArgumentException
+   *      Thrown if an {@link EChange} in {@code transaction} cannot be resolved.
+   * @throws IllegalStateException
+   *      Thrown if an {@link .EChange} in {@code transaction} cannot be executed.
    */
   protected abstract void applyTransactionOnEnvironment(Transaction<E> transaction);
 

@@ -189,7 +189,7 @@ public class Transaction<Element> {
   }
 
   /**
-   * Returns the next operation/{@link EChange} to invert.
+   * Returns the next operation/{@link EChange} to be undone, computing its inverse.
    *
    * @return {@link EChange}.
    */

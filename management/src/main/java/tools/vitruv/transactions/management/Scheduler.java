@@ -24,7 +24,7 @@ public interface Scheduler<E> {
    *
    * @param change - {@link VitruviusChange}
    */
-  void admitTransaction(VitruviusChange<E> change);
+  Transaction<E> admitTransaction(VitruviusChange<E> change);
 
   /**
    * Runs the next step in scheduling transactions
