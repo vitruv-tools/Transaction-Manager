@@ -14,7 +14,7 @@ jobs:
     name: Verify build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
 
@@ -38,7 +38,7 @@ jobs:
         ls -al &&
         ./mvnw clean install
         --batch-mode
-        --update-snapshot
+        --update-snapshots
         --no-transfer-progress &&
         cd ../
     - name: Prepare Vitruv Main submodule
@@ -47,7 +47,7 @@ jobs:
         ls -al &&
         ./mvnw clean install
         --batch-mode
-        --update-snapshot
+        --update-snapshots
         --no-transfer-progress &&
         cd ../
     - name: Verify Transaction Manager
