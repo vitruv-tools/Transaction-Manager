@@ -30,7 +30,23 @@ jobs:
         check-latest: true
         cache: 'maven'
 
-    - name: Verify build
+    - name: Prepare Vitruv-Change
+      run: >
+        cd Vitruv-Change &&
+        ./mvnw clean install
+        --batch-mode
+        --update-snapshot
+        --no-transfer-progress &&
+        cd ../
+    - name: Prepare Vitruv Main
+      run: >
+        cd Vitruv &&
+        ./mvnw clean install
+        --batch-mode
+        --update-snapshot
+        --no-transfer-progress &&
+        cd ../
+    - name: Verify Transaction Manager
       run: >
         ./mvnw clean verify
         --batch-mode
