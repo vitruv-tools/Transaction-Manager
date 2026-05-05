@@ -33,6 +33,7 @@ jobs:
     - name: Prepare Vitruv-Change
       run: >
         cd Vitruv-Change &&
+        ls -al &&
         ./mvnw clean install
         --batch-mode
         --update-snapshot
@@ -41,6 +42,7 @@ jobs:
     - name: Prepare Vitruv Main
       run: >
         cd Vitruv &&
+        ls -al &&
         ./mvnw clean install
         --batch-mode
         --update-snapshot
