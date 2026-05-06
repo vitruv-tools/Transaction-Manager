@@ -29,43 +29,42 @@ public class InverseEChangeComputer {
    * @return {@link EChange}
    */
   public static <E> EChange<E> computeInverseOf(EChange<E> input) {
-    return switch (input) {
-      case CreateEObject<E> create:
-        {
-          var newDeleteEObjectChange = EobjectFactory.eINSTANCE.createDeleteEObject();
-          newDeleteEObjectChange.setAffectedElement(create.getAffectedElement());
-          yield (EChange<E>) newDeleteEObjectChange;
-        }
-      case DeleteEObject<E> delete:
-        {
-          var newCreateEObjectChange = EobjectFactory.eINSTANCE.createCreateEObject();
-          newCreateEObjectChange.setAffectedElement(delete.getAffectedElement());
-          yield (EChange<E>) newCreateEObjectChange;
-        }
-      case ReplaceSingleValuedEAttribute<E, ?> replace:
-        yield eChangeFactory.createReplaceSingleAttributeChange(
-            replace.getAffectedElement(),
-            replace.getAffectedFeature(),
-            replace.getNewValue(),
-            replace.getOldValue()
-        );
-      case InsertEReference<E> insert:
-        yield eChangeFactory.createRemoveReferenceChange(
-            insert.getAffectedElement(),
-            insert.getAffectedFeature(),
-            insert.getNewValue(),
-            insert.getIndex()
-        );
-      case RemoveEReference<E> remove:
-        yield eChangeFactory.createInsertReferenceChange(
-            remove.getAffectedElement(),
-            remove.getAffectedFeature(),
-            remove.getOldValue(),
-            remove.getIndex()
-        );
-      default:
-        throw new IllegalArgumentException(String.format("Change type %s is unknown!",
-            input.eClass()));
-    };
+    if (input instanceof CreateEObject<E> create) {
+      var newDeleteEObjectChange = EobjectFactory.eINSTANCE.createDeleteEObject();
+      newDeleteEObjectChange.setAffectedElement(create.getAffectedElement());
+      return (EChange<E>) newDeleteEObjectChange;
+    }
+    if (input instanceof DeleteEObject<E> delete) {
+      var newCreateEObjectChange = EobjectFactory.eINSTANCE.createCreateEObject();
+      newCreateEObjectChange.setAffectedElement(delete.getAffectedElement());
+      return (EChange<E>) newCreateEObjectChange;
+    }
+    if (input instanceof ReplaceSingleValuedEAttribute<E, ?> replace) {
+      return eChangeFactory.createReplaceSingleAttributeChange(
+          replace.getAffectedElement(),
+          replace.getAffectedFeature(),
+          replace.getNewValue(),
+          replace.getOldValue()
+      );
+    }
+    if (input instanceof InsertEReference<E> insert) {
+      return eChangeFactory.createRemoveReferenceChange(
+          insert.getAffectedElement(),
+          insert.getAffectedFeature(),
+          insert.getNewValue(),
+          insert.getIndex()
+      );
+    }
+    if (input instanceof RemoveEReference<E> remove) {
+      return eChangeFactory.createInsertReferenceChange(
+          remove.getAffectedElement(),
+          remove.getAffectedFeature(),
+          remove.getOldValue(),
+          remove.getIndex()
+      );
+    }
+    throw new IllegalArgumentException(String.format("Change type %s is unknown!",
+        input.eClass()));
   }
 }
+
