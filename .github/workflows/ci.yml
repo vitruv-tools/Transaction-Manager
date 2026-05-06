@@ -36,6 +36,16 @@ jobs:
       run: >
         cd Vitruv-Change &&
         ./mvnw clean install
+        --fail-fast
+        --batch-mode
+        --update-snapshots
+        --no-transfer-progress &&
+        cd ../
+    - name: Prepare Vitruv DSLs submodule
+      run: >
+        cd Vitruv-DSLs &&
+        ./mvnw clean install
+        --fail-fast
         --batch-mode
         --update-snapshots
         --no-transfer-progress &&
@@ -44,6 +54,7 @@ jobs:
       run: >
         cd Vitruv &&
         ./mvnw clean install
+        --fail-fast
         --batch-mode
         --update-snapshots
         --no-transfer-progress &&
