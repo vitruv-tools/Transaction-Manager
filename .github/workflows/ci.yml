@@ -14,13 +14,15 @@ jobs:
     name: Verify build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         os: [ubuntu-latest]
 
     steps:
-    - name: Checkout repository
+    - name: Checkout repository with submodules
       uses: actions/checkout@v6.0.2
+      with:
+        submodules: true
 
     - name: Setup Java and Maven cache
       uses: actions/setup-java@v5.2.0
@@ -30,7 +32,23 @@ jobs:
         check-latest: true
         cache: 'maven'
 
-    - name: Verify build
+    - name: Prepare Vitruv-Change submodule
+      run: >
+        cd Vitruv-Change &&
+        ./mvnw clean install
+        --batch-mode
+        --update-snapshots
+        --no-transfer-progress &&
+        cd ../
+    - name: Prepare Vitruv Main submodule
+      run: >
+        cd Vitruv &&
+        ./mvnw clean install
+        --batch-mode
+        --update-snapshots
+        --no-transfer-progress &&
+        cd ../
+    - name: Verify Transaction Manager
       run: >
         ./mvnw clean verify
         --batch-mode
