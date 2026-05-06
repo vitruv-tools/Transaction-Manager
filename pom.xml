@@ -138,6 +138,11 @@
         <artifactId>tools.vitruv.change.interaction</artifactId>
         <version>${vitruv.version}</version>
       </dependency>
+      <dependency>
+        <groupId>tools.vitruv.multimodelocl</groupId>
+        <artifactId>multimodelocl-language</artifactId>
+        <version>1.0.2-SNAPSHOT</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 </project>

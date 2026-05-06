@@ -68,6 +68,10 @@
             <artifactId>tools.vitruv.change.testutils.integration</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>tools.vitruv.multimodelocl</groupId>
+            <artifactId>multimodelocl-language</artifactId>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
