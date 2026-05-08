@@ -8,12 +8,12 @@ import tools.vitruv.change.atomic.EChange;
 import tools.vitruv.change.composite.description.VitruviusChange;
 
 /**
- * A {@link Transaction} describes the execution state of a {@link VitruviusChange}
+ * {@link TransactionState}s describe the execution state of a {@link VitruviusChange}
  * in a transactional context.
  *
  * @param <Element> Element type that is modified through operations.
  */
-public class Transaction<Element> {
+public class TransactionState<Element> {
   /**
    * The underlying change that is executed.
    */
@@ -34,7 +34,7 @@ public class Transaction<Element> {
    */
   private EChange<Element> peeking = null;
   /**
-   * Current index of the {@link Transaction#operationToTestPointer}.
+   * Current index of the {@link TransactionState#operationToTestPointer}.
    */
   @Getter
   private int operationTestIndex = -1;
@@ -44,7 +44,7 @@ public class Transaction<Element> {
    */
   private final ListIterator<EChange<Element>> operationToExecutePointer;
   /**
-   * Current index of the {@link Transaction#operationToExecutePointer}.
+   * Current index of the {@link TransactionState#operationToExecutePointer}.
    */
   @Getter
   private int operationExecuteIndex = -1;
@@ -54,7 +54,7 @@ public class Transaction<Element> {
    *
    * @param underlyingChange - {@link VitruviusChange}
    */
-  public Transaction(VitruviusChange<Element> underlyingChange) {
+  public TransactionState(VitruviusChange<Element> underlyingChange) {
     checkState(underlyingChange.containsConcreteChange(),
         "Transactions can only be created for non-empty VitruviusChanges!");
     this.underlyingChange = underlyingChange;
@@ -173,7 +173,7 @@ public class Transaction<Element> {
    * Conditions:
    * <ul>
    *     <li>Only operations can be executed for which the execution check has passed
-   *     (cf. {@link Transaction#hasExecutableOperations()})</li>
+   *     (cf. {@link TransactionState#hasExecutableOperations()})</li>
    * </ul>
    *
    * @return {@link EChange}

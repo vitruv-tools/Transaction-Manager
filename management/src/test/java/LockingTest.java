@@ -12,7 +12,7 @@ import tools.vitruv.change.atomic.command.internal.ApplyEChangeSwitch;
 import tools.vitruv.change.composite.description.impl.TransactionalChangeImpl;
 import tools.vitruv.change.testutils.metamodels.AllElementTypesCreators;
 import tools.vitruv.transactions.management.InverseEChangeComputer;
-import tools.vitruv.transactions.management.Transaction;
+import tools.vitruv.transactions.management.TransactionState;
 import tools.vitruv.transactions.management.locking.*;
 
 import java.util.*;
@@ -460,7 +460,7 @@ public class LockingTest {
         private final Set<Lock<EObject>> locks = new HashSet<>();
         private final LockManager<EObject> manager;
         @Getter
-        private Transaction<EObject> transaction;
+        private TransactionState<EObject> transactionState;
 
         LockRequestingRunnable(LockManager<EObject> manager) {
             this.manager = manager;
@@ -477,19 +477,19 @@ public class LockingTest {
             var attributeChange = CommonCreatorClasses.getRootIntegerReplaceSingleValuedEAttributeChange(
                 CommonCreatorClasses.ROOT
             );
-            transaction = manager.submitTransaction(new TransactionalChangeImpl<>(
+            transactionState = manager.submitTransaction(new TransactionalChangeImpl<>(
                 List.of(attributeChange)
             ));
-            transaction.setToRunning();
+            transactionState.setToRunning();
             // Request locks
-            var blockingTransactions = manager.acquireLocksForNextOperation(transaction);
+            var blockingTransactions = manager.acquireLocksForNextOperation(transactionState);
             if (blockingTransactions.isPresent()) {
-                var status = transaction.getStatus();
+                var status = transactionState.getStatus();
                 assertSame(BLOCKED, status, () -> "Transaction should be blocked, but is %s" + status);
                 return;
             }
             // Add locks
-            locks.addAll(manager.getLocksHeldBy(transaction));
+            locks.addAll(manager.getLocksHeldBy(transactionState));
             // Release locks and finish
 //            locks.forEach(lock -> manager.unsetLock(lock, transaction));
 //            // Finish transaction

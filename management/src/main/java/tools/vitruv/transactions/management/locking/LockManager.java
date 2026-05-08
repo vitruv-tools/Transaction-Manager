@@ -10,7 +10,7 @@ import java.util.Optional;
 import java.util.Set;
 import tools.vitruv.change.atomic.EChange;
 import tools.vitruv.change.composite.description.VitruviusChange;
-import tools.vitruv.transactions.management.Transaction;
+import tools.vitruv.transactions.management.TransactionState;
 import tools.vitruv.transactions.management.TransactionStatus;
 
 
@@ -28,15 +28,15 @@ public class LockManager<E> {
   /**
    * Manages transaction information.
    */
-  private final Map<Transaction<E>, TransactionLockingData<E>> transactionData = new HashMap<>();
+  private final Map<TransactionState<E>, TransactionLockingData<E>> transactionData = new HashMap<>();
 
   /**
    * Submits a new {@link VitruviusChange} to run as transaction.
    *
    * @param change - {@link VitruviusChange}
    */
-  public synchronized Transaction<E> submitTransaction(VitruviusChange<E> change) {
-    var newTransaction = new Transaction<>(change);
+  public synchronized TransactionState<E> submitTransaction(VitruviusChange<E> change) {
+    var newTransaction = new TransactionState<>(change);
     transactionData.put(newTransaction, new TransactionLockingData<>());
     return newTransaction;
   }
@@ -44,13 +44,13 @@ public class LockManager<E> {
   /**
    * Returns all locks that {@code transaction} holds.
    *
-   * @param transaction - {@link Transaction}
+   * @param transactionState - {@link TransactionState}
    * @return {@link Set}
    */
-  public synchronized Set<Lock<E>> getLocksHeldBy(Transaction<E> transaction) {
-    checkArgument(transactionData.containsKey(transaction),
+  public synchronized Set<Lock<E>> getLocksHeldBy(TransactionState<E> transactionState) {
+    checkArgument(transactionData.containsKey(transactionState),
         "The transaction is not currently active!");
-    return Set.copyOf(transactionData.get(transaction).getHeldLocks());
+    return Set.copyOf(transactionData.get(transactionState).getHeldLocks());
   }
 
   /**
@@ -61,37 +61,37 @@ public class LockManager<E> {
    *  <li>the other transactions blocking {@code transaction}.</li>
    * </ol>
    *
-   * @param transaction - {@link Transaction}
+   * @param transactionState - {@link TransactionState}
    * @return {@link Optional}
    */
-  public synchronized Optional<Set<Transaction<E>>> acquireLocksForNextOperation(
-      Transaction<E> transaction) {
-    var data = transactionData.get(transaction);
+  public synchronized Optional<Set<TransactionState<E>>> acquireLocksForNextOperation(
+      TransactionState<E> transactionState) {
+    var data = transactionData.get(transactionState);
     checkArgument(data != null, "Transactions is not being processed!");
     checkArgument(!data.isUnlocking(),
         "Transaction has started to unlock; it must not acquire further locks!");
-    checkArgument(transaction.getStatus() == TransactionStatus.RUNNING,
+    checkArgument(transactionState.getStatus() == TransactionStatus.RUNNING,
         "Cannot acquire locks if the transaction is not running!");
     // Peek operation
-    var operation = transaction.peekNextOperationForExecutionChecking();
+    var operation = transactionState.peekNextOperationForExecutionChecking();
     // Compute locks
     var locksToAcquire = LockComputer.computeLocksFor(operation);
 
     // Identify all blocking transactions.
     for (var lock : locksToAcquire) {
-      var blockingTransactions = testLock(lock, transaction);
+      var blockingTransactions = testLock(lock, transactionState);
       if (blockingTransactions.isPresent()) {
         // Mark transaction as blocked
         data.blockOn(blockingTransactions.get());
-        transaction.setToBlocked();
+        transactionState.setToBlocked();
         return blockingTransactions;
       }
     }
     // Else, transaction succeeds
     for (var lock : locksToAcquire) {
-      setLock(lock, transaction);
+      setLock(lock, transactionState);
     }
-    transaction.markNextOperationAsExecutable();
+    transactionState.markNextOperationAsExecutable();
     return Optional.empty();
   }
 
@@ -99,13 +99,13 @@ public class LockManager<E> {
    * Acquires {@code lockToAcquire} for {@code transaction}.
    *
    * @param lockToAcquire - {@link Lock}
-   * @param transaction -  {@link Transaction}
+   * @param transactionState -  {@link TransactionState}
    * @return {@link Optional}
    *      The Optional type holds another transaction that already has the lock,
    *      and prevents its acquisition.
    */
-  public synchronized Optional<Set<Transaction<E>>> testLock(Lock<E> lockToAcquire,
-                                                             Transaction<E> transaction) {
+  public synchronized Optional<Set<TransactionState<E>>> testLock(Lock<E> lockToAcquire,
+                                                                  TransactionState<E> transactionState) {
     var data = lockData.get(lockToAcquire);
     // If no other transaction holds the lock, the request succeeds.
     if (data == null) {
@@ -115,7 +115,7 @@ public class LockManager<E> {
     // If only the current transaction holds the lock, the request also succeeds.
     // Convert the lock, if required.
     var holdingTransactions = data.getHolders();
-    if (holdingTransactions.size() == 1 && holdingTransactions.contains(transaction)) {
+    if (holdingTransactions.size() == 1 && holdingTransactions.contains(transactionState)) {
       return Optional.empty();
     }
 
@@ -136,25 +136,25 @@ public class LockManager<E> {
    * Actually acquires a lock for {@code transaction} and updates information in the lock manager.
    *
    * @param acquiredLock - {@link Lock}
-   * @param transaction -  {@link Transaction}
+   * @param transactionState -  {@link TransactionState}
    */
-  public synchronized void setLock(Lock<E> acquiredLock, Transaction<E> transaction) {
-    checkArgument(transactionData.containsKey(transaction),
+  public synchronized void setLock(Lock<E> acquiredLock, TransactionState<E> transactionState) {
+    checkArgument(transactionData.containsKey(transactionState),
         "This transaction may not acquire locks!");
     var data = lockData.get(acquiredLock);
     // If no other transaction holds the lock, the request succeeds.
     if (data == null) {
-      lockData.put(acquiredLock, new LockData<>(acquiredLock, transaction));
+      lockData.put(acquiredLock, new LockData<>(acquiredLock, transactionState));
     } else {
       var holders = data.getHolders();
       // If only the current transaction holds the lock, the request also succeeds.
       // Convert the lock, if required.
-      if (holders.size() == 1 && holders.contains(transaction)) {
+      if (holders.size() == 1 && holders.contains(transactionState)) {
         var currentLockMode = data.getMode();
         var newLockMode = LockMode.highestLockMode(currentLockMode, acquiredLock.mode);
         var upgradedLock = acquiredLock.convert(newLockMode);
 
-        lockData.put(upgradedLock, new LockData<>(upgradedLock, transaction));
+        lockData.put(upgradedLock, new LockData<>(upgradedLock, transactionState));
         return;
       } else {
         // If more than one transaction holds the lock in SIX mode, and the current transaction also
@@ -162,20 +162,20 @@ public class LockManager<E> {
         // If more than one transaction holds it, this is an indicator thereof.
         if (acquiredLock.mode == LockMode.SHARED_INTENSIONAL_EXCLUSIVE
             && data.getMode() == LockMode.SHARED_INTENSIONAL_EXCLUSIVE) {
-          holders.add(transaction);
+          holders.add(transactionState);
         }
       }
     }
-    transactionData.get(transaction).registerLock(acquiredLock);
+    transactionData.get(transactionState).registerLock(acquiredLock);
   }
 
   /**
    * Releases {@code lock} if it held by the {@code lockHolder} transaction.
    *
    * @param lock - {@link Lock}
-   * @param lockHolder - {@link Transaction}
+   * @param lockHolder - {@link TransactionState}
    */
-  public synchronized void releaseLock(Lock<E> lock, Transaction<E> lockHolder) {
+  public synchronized void releaseLock(Lock<E> lock, TransactionState<E> lockHolder) {
     // Transaction must be registered
     var data = transactionData.get(lockHolder);
     checkArgument(data != null, "Transaction is not currently active!");
@@ -200,34 +200,34 @@ public class LockManager<E> {
    * <p>Upon that point, we update the {@code waitsForGraph} relation, and return all
    * transactions that are now unblocked.
    *
-   * @param transaction - {@link Transaction}
+   * @param transactionState - {@link TransactionState}
    * @return {@link Collection}
    */
-  public synchronized Collection<Transaction<E>> commit(Transaction<E> transaction) {
-    checkArgument(transaction.getStatus() == TransactionStatus.RUNNING,
+  public synchronized Collection<TransactionState<E>> commit(TransactionState<E> transactionState) {
+    checkArgument(transactionState.getStatus() == TransactionStatus.RUNNING,
         "Only running transactions can be committed!");
-    checkArgument(!transaction.wantsToAcquireLocks(),
+    checkArgument(!transactionState.wantsToAcquireLocks(),
         "Only transactions that have no more operations can be committed!");
-    checkForReleaseOfAllLocks(transaction);
+    checkForReleaseOfAllLocks(transactionState);
     // Mark commit
-    transaction.setToCommited();
-    return unblockTransactionsBlockedBy(transaction);
+    transactionState.setToCommited();
+    return unblockTransactionsBlockedBy(transactionState);
   }
 
-  private List<Transaction<E>> unblockTransactionsBlockedBy(Transaction<E> transaction) {
+  private List<TransactionState<E>> unblockTransactionsBlockedBy(TransactionState<E> transactionState) {
     // Cleanup
-    transactionData.remove(transaction);
+    transactionData.remove(transactionState);
     // Collect unblocked transactions
     return transactionData
         .entrySet()
         .stream()
-        .filter(entry -> entry.getValue().unblock(transaction))
+        .filter(entry -> entry.getValue().unblock(transactionState))
         .map(Map.Entry::getKey)
         .toList();
   }
 
-  private void checkForReleaseOfAllLocks(Transaction<E> transaction) {
-    var data = transactionData.get(transaction);
+  private void checkForReleaseOfAllLocks(TransactionState<E> transactionState) {
+    var data = transactionData.get(transactionState);
     checkArgument(data.getHeldLocks().isEmpty(),
         "Only transactions that do not have locks can be commited!");
   }
@@ -239,29 +239,29 @@ public class LockManager<E> {
    * <p>Upon that point, we update the {@code waitsForGraph} relation, and return all
    * transactions that are now unblocked.
    *
-   * @param transaction - {@link Transaction}
+   * @param transactionState - {@link TransactionState}
    * @return {@link Collection}
    */
-  public synchronized Collection<Transaction<E>> abort(Transaction<E> transaction) {
-    checkArgument(transaction.getStatus() == TransactionStatus.ABORTING,
+  public synchronized Collection<TransactionState<E>> abort(TransactionState<E> transactionState) {
+    checkArgument(transactionState.getStatus() == TransactionStatus.ABORTING,
         "Only aborting transactions may be aborted!");
-    checkArgument(!transaction.hasOperationsToInvert(),
+    checkArgument(!transactionState.hasOperationsToInvert(),
         "Transaction still has operations to invert!");
-    checkForReleaseOfAllLocks(transaction);
+    checkForReleaseOfAllLocks(transactionState);
     // Mark abort
-    transaction.setToAborted();
-    return unblockTransactionsBlockedBy(transaction);
+    transactionState.setToAborted();
+    return unblockTransactionsBlockedBy(transactionState);
   }
 
   /**
    * Computes locks for the next operation of {@code transaction},
    * which must be running at this point.
    *
-   * @param transaction - {@link Transaction}
+   * @param transactionState - {@link TransactionState}
    * @return {@link List}
    */
-  public List<Lock<E>> computeNextLocksFor(Transaction<E> transaction) {
-    var nextOperation = transaction.peekNextOperationForExecutionChecking();
+  public List<Lock<E>> computeNextLocksFor(TransactionState<E> transactionState) {
+    var nextOperation = transactionState.peekNextOperationForExecutionChecking();
     return LockComputer.computeLocksFor(nextOperation);
   }
 

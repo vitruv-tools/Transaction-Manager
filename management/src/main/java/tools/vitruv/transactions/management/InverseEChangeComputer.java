@@ -11,7 +11,7 @@ import tools.vitruv.change.atomic.feature.reference.InsertEReference;
 import tools.vitruv.change.atomic.feature.reference.RemoveEReference;
 
 /**
- * Utility class that computes inverse {@link EChange}s for undoing {@link Transaction}s
+ * Utility class that computes inverse {@link EChange}s for undoing {@link TransactionState}s
  * when they are aborted.
  */
 @UtilityClass

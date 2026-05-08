@@ -8,12 +8,12 @@ import java.util.Set;
 import lombok.AccessLevel;
 import lombok.Data;
 import lombok.Setter;
-import tools.vitruv.transactions.management.Transaction;
+import tools.vitruv.transactions.management.TransactionState;
 
 /**
- * Represents information about a {@link Transaction} within a lock manager.
+ * Represents information about a {@link TransactionState} within a lock manager.
  *
- * @param <E> - The data type of locking {@link Transaction}s.
+ * @param <E> - The data type of locking {@link TransactionState}s.
  */
 @Data
 class TransactionLockingData<E> {
@@ -30,7 +30,7 @@ class TransactionLockingData<E> {
   /**
    * Other transactions that currently block this transaction.
    */
-  private final Set<Transaction<E>> waitsFor = new HashSet<>();
+  private final Set<TransactionState<E>> waitsFor = new HashSet<>();
 
   /**
    * Adds {@code lock} to the {@link TransactionLockingData#heldLocks}.
@@ -59,19 +59,19 @@ class TransactionLockingData<E> {
    *
    * @param otherTransactions - {@link Set}
    */
-  void blockOn(Set<Transaction<E>> otherTransactions) {
+  void blockOn(Set<TransactionState<E>> otherTransactions) {
     waitsFor.addAll(otherTransactions);
   }
 
   /**
    * Unblocks this transaction for {@code unlockingTransaction}.
    *
-   * @param unlockingTransaction - {@link Transaction}
+   * @param unlockingTransactionState - {@link TransactionState}
    * @return Boolean
    *      true if and only if the managed transaction does not wait on other transactions.
    */
-  boolean unblock(Transaction<E> unlockingTransaction) {
-    waitsFor.remove(unlockingTransaction);
+  boolean unblock(TransactionState<E> unlockingTransactionState) {
+    waitsFor.remove(unlockingTransactionState);
     return waitsFor.isEmpty();
   }
 }

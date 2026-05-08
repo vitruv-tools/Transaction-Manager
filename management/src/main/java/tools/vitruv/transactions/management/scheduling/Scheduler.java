@@ -1,7 +1,8 @@
-package tools.vitruv.transactions.management;
+package tools.vitruv.transactions.management.scheduling;
 
 import tools.vitruv.change.composite.description.VitruviusChange;
 import tools.vitruv.framework.vsum.VirtualModel;
+import tools.vitruv.transactions.management.TransactionState;
 
 /**
  * A generic scheduler interface.
@@ -10,8 +11,9 @@ import tools.vitruv.framework.vsum.VirtualModel;
  * application on a {@link VirtualModel}, which acts as multi-model environment.
  *
  * @param <E> - Type of model elements an environment holds.
+ * @param <T> - Type of transaction executor threads.
  */
-public interface Scheduler<E> {
+public interface Scheduler<E, T extends TransactionExecutorThread<E>> {
   /**
    * Returns the environment for which transactions are scheduled.
    *
@@ -23,8 +25,9 @@ public interface Scheduler<E> {
    * Admits {@code change} and creates a new transaction.
    *
    * @param change - {@link VitruviusChange}
+   * @return {@link TransactionState}
    */
-  Transaction<E> admitTransaction(VitruviusChange<E> change);
+  TransactionState<E> admitTransaction(VitruviusChange<E> change);
 
   /**
    * Runs the next step in scheduling transactions

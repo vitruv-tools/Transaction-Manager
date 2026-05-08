@@ -1,7 +1,7 @@
 package tools.vitruv.transactions.management;
 
 /**
- * The current processing status of a {@link Transaction}.
+ * The current processing status of a {@link TransactionState}.
  */
 public enum TransactionStatus {
   /**

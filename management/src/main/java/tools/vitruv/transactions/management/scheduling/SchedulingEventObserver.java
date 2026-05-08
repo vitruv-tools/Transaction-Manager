@@ -1,10 +1,11 @@
-package tools.vitruv.transactions.management;
+package tools.vitruv.transactions.management.scheduling;
 
 import java.util.Collection;
 import tools.vitruv.change.atomic.EChange;
+import tools.vitruv.transactions.management.TransactionState;
 
 /**
- * An observer to scheduling events that a {@link Scheduler} emits.
+ * An observer to transaction execution events.
  * Such events are:
  *
  * <ol>
@@ -21,54 +22,54 @@ public interface SchedulingEventObserver<E> {
   /**
    * Observe that {@code newTransaction} has been submitted to the {@code scheduler}.
    *
-   * @param newTransaction {@link Transaction}
+   * @param newTransaction {@link TransactionState}
    */
-  default void observeAdmission(Transaction<E> newTransaction) {}
+  default void observeAdmission(TransactionState<E> newTransaction) {}
 
   /**
    * Observe that {@code running} can now start to execute operations.
    *
-   * @param running {@link Transaction}
+   * @param running {@link TransactionState}
    */
-  default void observeRunning(Transaction<E> running) {}
+  default void observeRunning(TransactionState<E> running) {}
 
   /**
    * Observe that {@code forTransaction} has executed {@code step}.
    *
    * @param step {@link EChange}
-   * @param forTransaction {@link Transaction}
+   * @param forTransaction {@link TransactionState}
    */
-  default void observeExecutionOf(EChange<E> step, Transaction<E> forTransaction) {}
+  default void observeExecutionOf(EChange<E> step, TransactionState<E> forTransaction) {}
 
   /**
    * Observe that {@code blockedTransaction} is blocked by the set of {@code blockingTransactions},
    * and is waiting for their further execution.
    *
-   * @param blockedTransaction {@link Transaction}
+   * @param blockedTransaction {@link TransactionState}
    * @param blockingTransactions {@link Collection}
    */
-  default void observeBlockOf(Transaction<E> blockedTransaction,
-                              Collection<Transaction<E>> blockingTransactions) {}
+  default void observeBlockOf(TransactionState<E> blockedTransaction,
+                              Collection<TransactionState<E>> blockingTransactions) {}
 
   /**
    * Observe that {@code commited} has been commited, as all its operations have been executed.
    *
-   * @param commited {@link Transaction}
+   * @param commited {@link TransactionState}
    */
-  default void observeCommit(Transaction<E> commited) {}
+  default void observeCommit(TransactionState<E> commited) {}
 
   /**
    * Observe that {@code step} has been undone during the abort of {@code forTransaction}.
    *
    * @param step {@link EChange}
-   * @param forTransaction {@link Transaction}
+   * @param forTransaction {@link TransactionState}
    */
-  default void observeUndo(EChange<E> step, Transaction<E> forTransaction) {}
+  default void observeUndo(EChange<E> step, TransactionState<E> forTransaction) {}
 
   /**
    * Observe that a transaction is {@code aborting}, and may need to be executed again.
    *
-   * @param aborting {@link Transaction}
+   * @param aborting {@link TransactionState}
    */
-  default void observeAbort(Transaction<E> aborting) {}
+  default void observeAbort(TransactionState<E> aborting) {}
 }

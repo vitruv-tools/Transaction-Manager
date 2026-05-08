@@ -1,17 +1,19 @@
-package tools.vitruv.transactions.management;
+package tools.vitruv.transactions.management.scheduling;
 
 import java.util.LinkedList;
 import java.util.List;
 import tools.vitruv.change.atomic.EChange;
 import tools.vitruv.framework.vsum.VirtualModel;
 import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
+import tools.vitruv.transactions.management.TransactionState;
 
 /**
  * An abstract scheduler that mostly holds required data.
  *
  * @param <E> Type of model elements that the MME manages.
  */
-public abstract class AbstractScheduler<E> implements Scheduler<E> {
+public abstract class AbstractScheduler<E, T extends TransactionExecutorThread<E>>
+    implements Scheduler<E, T> {
   /**
    * The multi-model environment where transactions are applied on.
    */
@@ -43,13 +45,13 @@ public abstract class AbstractScheduler<E> implements Scheduler<E> {
    * <p>Concrete implementations of this method can make further restrictions on {@code transaction}
    * and {@link AbstractScheduler#multiModelEnvironment}.
    *
-   * @param transaction - {@link Transaction}
+   * @param transaction - {@link TransactionState}
    * @throws IllegalArgumentException
    *      Thrown if an {@link EChange} in {@code transaction} cannot be resolved.
    * @throws IllegalStateException
-   *      Thrown if an {@link .EChange} in {@code transaction} cannot be executed.
+   *      Thrown if an {@link EChange} in {@code transaction} cannot be executed.
    */
-  protected abstract void applyTransactionOnEnvironment(Transaction<E> transaction);
+  protected abstract void applyTransactionOnEnvironment(TransactionState<E> transaction);
 
   @Override
   public void addListener(SchedulingEventObserver<E> observer) {
