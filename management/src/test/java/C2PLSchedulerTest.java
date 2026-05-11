@@ -14,7 +14,6 @@ import org.eclipse.emf.ecore.EObject;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tools.vitruv.change.atomic.EChange;
 import tools.vitruv.change.atomic.uuid.AtomicEChangeUuidResolver;
 import tools.vitruv.change.atomic.uuid.Uuid;
 import tools.vitruv.change.atomic.uuid.UuidResolver;
@@ -167,7 +166,7 @@ public class C2PLSchedulerTest {
     scheduler.addListener(observer);
 
     // Transaction 2 -> create NonRoot, set Root attribute
-    var vitruvChange2 = createTransactionFrom(List.of(
+    var vitruvChange2 = CommonCreatorClasses.createTransactionFrom(List.of(
         CommonCreatorClasses.E_CHANGE_FACTORY.createReplaceSingleAttributeChange(
             nonRoot,
             AllElementTypesPackage.eINSTANCE
@@ -179,7 +178,7 @@ public class C2PLSchedulerTest {
     );
 
     // Transaction 1 -> delete Root
-    var vitruvChange1 = createTransactionFrom(List.of(
+    var vitruvChange1 = CommonCreatorClasses.createTransactionFrom(List.of(
         CommonCreatorClasses.getDeleteRootEObjectChange(root))
     );
 
@@ -198,9 +197,4 @@ public class C2PLSchedulerTest {
     assertTrue(observer.getAbortedTransactions().contains(transaction2));
   }
 
-  private TransactionalChangeImpl<EObject> createTransactionFrom(List<EChange<EObject>> originalChanges) {
-    return new TransactionalChangeImpl<>(
-        originalChanges
-    );
-  }
 }

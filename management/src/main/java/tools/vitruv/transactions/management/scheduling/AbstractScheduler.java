@@ -39,20 +39,6 @@ public abstract class AbstractScheduler<E, T extends TransactionExecutorThread<E
     this.multiModelEnvironment = multiModelEnvironment;
   }
 
-  /**
-   * Applies {@code transaction} on {@link AbstractScheduler#multiModelEnvironment}.
-   *
-   * <p>Concrete implementations of this method can make further restrictions on {@code transaction}
-   * and {@link AbstractScheduler#multiModelEnvironment}.
-   *
-   * @param transaction - {@link TransactionState}
-   * @throws IllegalArgumentException
-   *      Thrown if an {@link EChange} in {@code transaction} cannot be resolved.
-   * @throws IllegalStateException
-   *      Thrown if an {@link EChange} in {@code transaction} cannot be executed.
-   */
-  protected abstract void applyTransactionOnEnvironment(TransactionState<E> transaction);
-
   @Override
   public void addListener(SchedulingEventObserver<E> observer) {
     observers.add(observer);

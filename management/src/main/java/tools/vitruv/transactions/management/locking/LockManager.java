@@ -221,7 +221,9 @@ public class LockManager<E> {
     return transactionData
         .entrySet()
         .stream()
-        .filter(entry -> entry.getValue().unblock(transactionState))
+        .filter(entry ->
+          entry.getKey().getStatus() == TransactionStatus.BLOCKED
+                  && entry.getValue().unblock(transactionState))
         .map(Map.Entry::getKey)
         .toList();
   }

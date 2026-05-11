@@ -1,15 +1,18 @@
 import allElementTypes.AllElementTypesPackage;
 import allElementTypes.NonRoot;
 import allElementTypes.Root;
+import java.util.List;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EReference;
+import tools.vitruv.change.atomic.EChange;
 import tools.vitruv.change.atomic.TypeInferringAtomicEChangeFactory;
 import tools.vitruv.change.atomic.eobject.CreateEObject;
 import tools.vitruv.change.atomic.eobject.DeleteEObject;
 import tools.vitruv.change.atomic.feature.attribute.ReplaceSingleValuedEAttribute;
 import tools.vitruv.change.atomic.feature.reference.InsertEReference;
 import tools.vitruv.change.atomic.feature.reference.RemoveEReference;
+import tools.vitruv.change.composite.description.impl.TransactionalChangeImpl;
 import tools.vitruv.change.testutils.metamodels.AllElementTypesCreators;
 
 public class CommonCreatorClasses {
@@ -60,5 +63,11 @@ public class CommonCreatorClasses {
             NON_ROOT,
             0
         );
+    }
+
+    public static TransactionalChangeImpl<EObject> createTransactionFrom(List<EChange<EObject>> originalChanges) {
+      return new TransactionalChangeImpl<>(
+          originalChanges
+      );
     }
 }

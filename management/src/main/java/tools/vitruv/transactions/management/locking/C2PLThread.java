@@ -1,11 +1,14 @@
 package tools.vitruv.transactions.management.locking;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
 import org.eclipse.emf.ecore.EObject;
 import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
 import tools.vitruv.transactions.management.TransactionState;
 import tools.vitruv.transactions.management.TransactionStatus;
+import tools.vitruv.transactions.management.scheduling.TransactionExecutorThread;
 import tools.vitruv.transactions.management.scheduling.VitruviusTransactionExecutorThread;
 
 /**
@@ -39,15 +42,17 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
    *     <li>Attempt to acquire all locks.</li>
    *     <li>If successful, execute the transaction on {@code multiModelEnvironment}.</li>
    *     <li>Otherwise, block the transaction, returning {@link TransactionStatus#BLOCKED}</li>
-   *     <li>When a operation cannot be applied/an exception is thrown,
+   *     <li>When an operation cannot be applied/an exception is thrown,
    *     undo the entire transaction and return {@link TransactionStatus#ABORTED}</li>.
    *     <li>When the transaction succeeds entirely, return {@link TransactionStatus#COMMITED}.</li>
    * </ol>
    *
-   * @return boolean
+   * @return result {@link TransactionExecutorThread.Result}
+   *        result contains the {@link TransactionStatus} described above, and in the case of
+   *        {@link TransactionStatus#COMMITED}, also the unblocked transactions.
    */
   @Override
-  public TransactionStatus call() {
+  public TransactionExecutorThread.Result<EObject> call() {
     transactionState.setToRunning();
 
     // Attempt to preclaim all locks
@@ -56,7 +61,7 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
       blockingTransactions = lockManager.acquireLocksForNextOperation(transactionState);
       if (blockingTransactions.isPresent()) {
         handleBlock(blockingTransactions.get());
-        return TransactionStatus.BLOCKED;
+        return new Result<>(TransactionStatus.BLOCKED, Collections.emptyList());
       }
     }
 
@@ -69,22 +74,29 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
     } catch (IllegalArgumentException | IllegalStateException e) {
       // An operation failed to execute, undo the transaction
       transactionState.setToAborting();
+      // Throw away failing operation
+      if (transactionState.hasOperationsToInvert()) {
+        transactionState.getNextInverseOperation();
+      }
+
+      // Undo all previous operations
       while (transactionState.hasOperationsToInvert()) {
         super.applyEChangeBackward();
       }
-    } finally {
-      // Release all locks
-      releaseAllLocks();
-      finishExecutionOfEChanges();
     }
 
+    // Release all locks
+    releaseAllLocks();
+    finishExecutionOfEChanges();
+
+    var unblockedTransactions = new ArrayList<TransactionState<EObject>>();
     // Commit or abort
     if (transactionState.getStatus() == TransactionStatus.ABORTING) {
-      lockManager.abort(transactionState);
+      unblockedTransactions.addAll(lockManager.abort(transactionState));
     } else {
-      lockManager.commit(transactionState);
+      unblockedTransactions.addAll(lockManager.commit(transactionState));
     }
-    return transactionState.getStatus();
+    return new Result<>(transactionState.getStatus(), unblockedTransactions);
   }
 
   /**
