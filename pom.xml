@@ -23,7 +23,7 @@
 
   <properties>
     <vitruv.version>3.2.5-SNAPSHOT</vitruv.version>
-    <vitruv-dsls.version>3.2.-SNAPSHOT</vitruv-dsls.version>
+    <vitruv-dsls.version>3.2.5-SNAPSHOT</vitruv-dsls.version>
     <maven.compiler.release>17</maven.compiler.release>
     <maven.compiler.source>17</maven.compiler.source>
     <maven.compiler.target>17</maven.compiler.target>
