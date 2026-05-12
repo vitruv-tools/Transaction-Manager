@@ -2,6 +2,7 @@ package tools.vitruv.transactions.management.scheduling;
 
 import java.util.Collection;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import tools.vitruv.transactions.management.TransactionState;
 import tools.vitruv.transactions.management.TransactionStatus;
 
@@ -21,14 +22,21 @@ public abstract class TransactionExecutorThread<E>
    * The transaction to actually execute.
    */
   protected final TransactionState<E> transactionState;
+  /**
+   * Observers that can be informed about transaction/scheduling events.
+   */
+  protected final ConcurrentLinkedDeque<SchedulingEventObserver<E>> observers;
 
   /**
    * Creates a new {@link TransactionExecutorThread}.
    *
    * @param transactionState {@link TransactionState}
+   * @param observers {@link ConcurrentLinkedDeque}
    */
-  public TransactionExecutorThread(TransactionState<E> transactionState) {
+  public TransactionExecutorThread(TransactionState<E> transactionState,
+                                   ConcurrentLinkedDeque<SchedulingEventObserver<E>> observers) {
     this.transactionState = transactionState;
+    this.observers = observers;
   }
 
   /**

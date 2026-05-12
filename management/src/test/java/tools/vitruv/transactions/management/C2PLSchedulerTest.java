@@ -9,6 +9,7 @@ import allElementTypes.NonRoot;
 import allElementTypes.Root;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -16,6 +17,9 @@ import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EObject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.vitruv.change.atomic.EChange;
+import tools.vitruv.change.atomic.TypeInferringAtomicEChangeFactory;
+import tools.vitruv.change.atomic.eobject.CreateEObject;
 import tools.vitruv.change.atomic.uuid.AtomicEChangeUuidResolver;
 import tools.vitruv.change.atomic.uuid.Uuid;
 import tools.vitruv.change.atomic.uuid.UuidResolver;
@@ -107,7 +111,6 @@ public class C2PLSchedulerTest {
 
     // Apply transaction, check that it has been applied correctly.
     scheduler.admitTransaction(getFirstChange());
-    scheduler.runNextStep();
 
     var newRoot = getRoot().get();
     // Second transaction: Create a new NonRoot and insert it.
@@ -126,11 +129,10 @@ public class C2PLSchedulerTest {
                 )
         )
     );
-
-    assertEquals(42, newRoot.getSingleValuedEAttribute());
     scheduler.admitTransaction(transaction2);
-    assertTrue(newRoot.getMultiValuedContainmentEReference().isEmpty());
-    scheduler.runNextStep();
+
+    assertTrue(scheduler.waitForApplicationOfRunningTransactions());
+    assertEquals(42, newRoot.getSingleValuedEAttribute());
     assertFalse(newRoot.getMultiValuedContainmentEReference().isEmpty());
   }
 
@@ -153,6 +155,70 @@ public class C2PLSchedulerTest {
         .stream().filter(e -> e instanceof NonRoot)
         .map(e -> (NonRoot) e)
         .findFirst();
+  }
+
+  /**
+   * Check that multiple transactions without unresolvable conflicts
+   * eventually succeed.
+   *
+   * @param testPath Path
+   */
+  @Test
+  void testMultipleTransactionsAtTheSameTime(@TempDir Path testPath) {
+    // Set up environment
+    setupMultiModelEnvironment(testPath);
+
+    // Create Changes
+    var root = getRoot().get();
+    int counter = 8794;
+    List<TransactionalChangeImpl<EObject>> changes = new ArrayList<>();
+    for (int i = 0; i < counter; i++) {
+      changes.add(
+          CommonCreatorClasses
+              .createTransactionFrom(createNonRootAndInsertionTransaction(counter, root))
+      );
+    }
+
+    // Submit Transactions
+    var scheduler = new C2PLScheduler(environment);
+    var transactionStatusTracker = new TransactionStatusTracker<EObject>();
+    scheduler.addListener(transactionStatusTracker);
+
+    var transactions = new ArrayList<TransactionState<EObject>>();
+    for (var change : changes) {
+      transactions.add(scheduler.admitTransaction(change));
+    }
+
+    // Check for full execution
+    scheduler.waitForApplicationOfRunningTransactions();
+    var committedTransactions = transactionStatusTracker.getCommitedTransactions();
+    assertEquals(counter, committedTransactions.size());
+  }
+
+  static List<EChange<EObject>> createNonRootAndInsertionTransaction(int counter, Root root) {
+    var newNonRoot = AllElementTypesCreators.aet.NonRoot();
+    EChange<EObject> nonRootCreate = TypeInferringAtomicEChangeFactory.getInstance()
+        .createCreateEObjectChange(newNonRoot);
+    EChange<EObject> setValueChange = TypeInferringAtomicEChangeFactory.getInstance()
+        .createReplaceSingleAttributeChange(
+            newNonRoot,
+            AllElementTypesPackage.eINSTANCE.getNonRoot_Value(),
+            null,
+            "" + counter
+        );
+    EChange<EObject> insertReferenceChange = TypeInferringAtomicEChangeFactory.getInstance()
+        .createInsertReferenceChange(
+            root,
+            AllElementTypesPackage.eINSTANCE.getRoot_MultiValuedContainmentEReference(),
+            newNonRoot,
+            0
+        );
+
+    return List.of(
+        nonRootCreate,
+        setValueChange,
+        insertReferenceChange
+    );
   }
 
   /**
@@ -191,12 +257,7 @@ public class C2PLSchedulerTest {
     // Submit transactions
     var transaction1 = scheduler.admitTransaction(vitruvChange1);
     var transaction2 = scheduler.admitTransaction(vitruvChange2);
-
-    // Apply transaction 1
-    scheduler.runNextStep();
-    // Apply transaction 2, deal with failure.
-    // NonRoot -> check nonRoot_Value
-    scheduler.runNextStep();
+    assertTrue(scheduler.waitForApplicationOfRunningTransactions());
 
     // T1 succeeds, T2 does not
     assertTrue(observer.getCommitedTransactions().contains(transaction1));

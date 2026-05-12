@@ -2,6 +2,7 @@ package tools.vitruv.transactions.management.scheduling;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import org.eclipse.emf.ecore.EObject;
 import tools.vitruv.change.atomic.EChange;
 import tools.vitruv.change.atomic.eobject.CreateEObject;
@@ -15,6 +16,14 @@ import tools.vitruv.transactions.management.TransactionState;
 /**
  * A {@link VitruviusTransactionExecutorThread} is explicitly able to execute
  * {@link EChange}s forwards and backwards (for undo) against a {@link InternalVirtualModel}.
+ *
+ * <p>The order of methods to call is:
+ * {@code startExecutionOfEChanges}
+ * -> {@code applyEChangeBackward/applyEChangeForward}
+ * -> {@code finishExecutionOfEChanges}.
+ *
+ * <p><b>Warning</b>: Execution methods are not thread-safe per-se.
+ * This is the responsibility of other classes extending {@link VitruviusTransactionExecutorThread}.
  */
 public abstract class VitruviusTransactionExecutorThread
         extends TransactionExecutorThread<EObject> {
@@ -46,9 +55,10 @@ public abstract class VitruviusTransactionExecutorThread
    * @param multiModelEnvironment {@link InternalVirtualModel}
    */
   public VitruviusTransactionExecutorThread(
-          TransactionState<EObject> transactionState,
-          InternalVirtualModel multiModelEnvironment) {
-    super(transactionState);
+      TransactionState<EObject> transactionState,
+      ConcurrentLinkedDeque<SchedulingEventObserver<EObject>> observers,
+      InternalVirtualModel multiModelEnvironment) {
+    super(transactionState, observers);
     this.multiModelEnvironment = multiModelEnvironment;
     this.baseUuidResolver = multiModelEnvironment.getUuidResolver();
   }

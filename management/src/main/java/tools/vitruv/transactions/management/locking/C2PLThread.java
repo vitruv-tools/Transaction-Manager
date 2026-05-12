@@ -4,10 +4,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import org.eclipse.emf.ecore.EObject;
 import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
 import tools.vitruv.transactions.management.TransactionState;
 import tools.vitruv.transactions.management.TransactionStatus;
+import tools.vitruv.transactions.management.scheduling.SchedulingEventObserver;
 import tools.vitruv.transactions.management.scheduling.TransactionExecutorThread;
 import tools.vitruv.transactions.management.scheduling.VitruviusTransactionExecutorThread;
 
@@ -25,13 +27,15 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
    * with {@code lockManager}.
    *
    * @param transactionState {@link TransactionState}
+   * @param observers {@link ConcurrentLinkedDeque}
    * @param virtualModel {@link InternalVirtualModel}
    * @param lockManager {@link LockManager}
    */
   public C2PLThread(TransactionState<EObject> transactionState,
+                    ConcurrentLinkedDeque<SchedulingEventObserver<EObject>> observers,
                     InternalVirtualModel virtualModel,
                     LockManager<EObject> lockManager) {
-    super(transactionState, virtualModel);
+    super(transactionState, observers, virtualModel);
     this.lockManager = lockManager;
   }
 
@@ -53,14 +57,20 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
    */
   @Override
   public TransactionExecutorThread.Result<EObject> call() {
+    observers.forEach(observer -> observer.observeRunning(transactionState));
     transactionState.setToRunning();
 
     // Attempt to preclaim all locks
-    Optional<Set<TransactionState<EObject>>> blockingTransactions;
     while (transactionState.wantsToAcquireLocks()) {
-      blockingTransactions = lockManager.acquireLocksForNextOperation(transactionState);
+      var blockingTransactions = lockManager.acquireLocksForNextOperation(transactionState);
       if (blockingTransactions.isPresent()) {
         handleBlock(blockingTransactions.get());
+        // Inform observers about block
+        observers.forEach(
+            observer -> observer.observeBlockOf(
+            this.transactionState,
+                blockingTransactions.get())
+        );
         return new Result<>(TransactionStatus.BLOCKED, Collections.emptyList());
       }
     }
@@ -92,8 +102,10 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
     var unblockedTransactions = new ArrayList<TransactionState<EObject>>();
     // Commit or abort
     if (transactionState.getStatus() == TransactionStatus.ABORTING) {
+      observers.forEach(observers -> observers.observeAbort(transactionState));
       unblockedTransactions.addAll(lockManager.abort(transactionState));
     } else {
+      observers.forEach(observers -> observers.observeCommit(transactionState));
       unblockedTransactions.addAll(lockManager.commit(transactionState));
     }
     return new Result<>(transactionState.getStatus(), unblockedTransactions);

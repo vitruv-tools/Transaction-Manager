@@ -1,23 +1,37 @@
 package tools.vitruv.transactions.management.scheduling;
 
-import java.util.LinkedList;
-import java.util.List;
-import tools.vitruv.change.atomic.EChange;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import tools.vitruv.framework.vsum.VirtualModel;
 import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
 import tools.vitruv.transactions.management.TransactionState;
 
 /**
- * An abstract scheduler that mostly holds required data.
+ * An abstract scheduler that holds an {@link InternalVirtualModel}, and is able to create
+ * arbitrary {@link TransactionExecutorThread}s, and ensure their execution.
+ *
+ * <p>Subclasses of {@link AbstractScheduler} must implement {@code createNewExecutorThread}
+ * in order to control how access to the multi-model environment happens.
  *
  * @param <E> Type of model elements that the MME manages.
+ * @param <T> Type of transaction executor threads.
  */
 public abstract class AbstractScheduler<E, T extends TransactionExecutorThread<E>>
     implements Scheduler<E, T> {
   /**
+   * Timeout in milliseconds given for termination.
+   */
+  public static final long SHUTDOWN_TIMEOUT = 1000000000;
+  /**
    * The multi-model environment where transactions are applied on.
    */
   protected final InternalVirtualModel multiModelEnvironment;
+  /**
+   * Executor service for transaction threads.
+   */
+  protected final ExecutorService transactionThreadService = Executors.newSingleThreadExecutor();
 
   @Override
   public VirtualModel getMultiModelEnvironment() {
@@ -27,8 +41,8 @@ public abstract class AbstractScheduler<E, T extends TransactionExecutorThread<E
   /**
    * Observers for scheduling events.
    */
-  protected final List<SchedulingEventObserver<E>> observers
-      = new LinkedList<>();
+  protected final ConcurrentLinkedDeque<SchedulingEventObserver<E>> observers
+      = new ConcurrentLinkedDeque<>();
 
   /**
    * Creates a new {@link AbstractScheduler}.
@@ -39,6 +53,15 @@ public abstract class AbstractScheduler<E, T extends TransactionExecutorThread<E
     this.multiModelEnvironment = multiModelEnvironment;
   }
 
+  /**
+   * Creates a new {@link TransactionExecutorThread} of subtype {@code T}
+   * for {@code newTransaction}.
+   *
+   * @param newTransaction {@link TransactionState}
+   * @return T
+   */
+  protected abstract T createNewExecutorThread(TransactionState<E> newTransaction);
+
   @Override
   public void addListener(SchedulingEventObserver<E> observer) {
     observers.add(observer);
@@ -47,5 +70,22 @@ public abstract class AbstractScheduler<E, T extends TransactionExecutorThread<E
   @Override
   public void removeListener(SchedulingEventObserver<E> observer) {
     observers.remove(observer);
+  }
+
+  /**
+   * Shuts down the {@code transactionThreadService} and waits
+   * for currently executing transaction execution threads to finish.
+   *
+   * @return true if all execution threads finished in time,
+   *     false if they did not.
+   */
+  @Override
+  public boolean waitForApplicationOfRunningTransactions() {
+    transactionThreadService.shutdown();
+    try {
+      return transactionThreadService.awaitTermination(AbstractScheduler.SHUTDOWN_TIMEOUT, TimeUnit.MICROSECONDS);
+    } catch (InterruptedException e) {
+      return false;
+    }
   }
 }

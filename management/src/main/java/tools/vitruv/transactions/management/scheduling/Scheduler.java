@@ -10,6 +10,10 @@ import tools.vitruv.transactions.management.TransactionState;
  * <p>Takes complete {@link VitruviusChange}s and ensures their transactional
  * application on a {@link VirtualModel}, which acts as multi-model environment.
  *
+ * <p>Schedulers may process {@link VitruviusChange}s asynchronously. Schedulers inform other parties
+ * through the {@link SchedulingEventObserver} interface when transactions finish
+ * (either through commit or abort).
+ *
  * @param <E> - Type of model elements an environment holds.
  * @param <T> - Type of transaction executor threads.
  */
@@ -22,20 +26,13 @@ public interface Scheduler<E, T extends TransactionExecutorThread<E>> {
   VirtualModel getMultiModelEnvironment();
 
   /**
-   * Admits {@code change} and creates a new transaction.
+   * Admits {@code change} and starts to execute the {@link TransactionExecutorThread}
+   * that processes the new transaction.
    *
    * @param change - {@link VitruviusChange}
    * @return {@link TransactionState}
    */
   TransactionState<E> admitTransaction(VitruviusChange<E> change);
-
-  /**
-   * Runs the next step in scheduling transactions
-   * (selecting a transaction to run, running the next step, blocking or commiting).
-   *
-   * @return true if active transactions remain, false otherwise.
-   */
-  boolean runNextStep();
 
   /**
    * Adds {@code observer} to observe scheduling events.
@@ -50,4 +47,11 @@ public interface Scheduler<E, T extends TransactionExecutorThread<E>> {
    * @param observer - {@link SchedulingEventObserver}
    */
   void removeListener(SchedulingEventObserver<E> observer);
+
+  /**
+   * Waits for all currently running {@link TransactionExecutorThread}s to finish execution.
+   *
+   * @return boolean {@code true} if and only if all running threads have stopped execution.
+   */
+  boolean waitForApplicationOfRunningTransactions();
 }
