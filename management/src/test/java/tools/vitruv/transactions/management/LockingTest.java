@@ -1,3 +1,5 @@
+package tools.vitruv.transactions.management;
+
 import static java.lang.Thread.sleep;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -27,8 +29,6 @@ import tools.vitruv.change.atomic.EChange;
 import tools.vitruv.change.atomic.command.internal.ApplyEChangeSwitch;
 import tools.vitruv.change.composite.description.impl.TransactionalChangeImpl;
 import tools.vitruv.change.testutils.metamodels.AllElementTypesCreators;
-import tools.vitruv.transactions.management.InverseEChangeComputer;
-import tools.vitruv.transactions.management.TransactionState;
 import tools.vitruv.transactions.management.locking.ElementLock;
 import tools.vitruv.transactions.management.locking.FeatureLock;
 import tools.vitruv.transactions.management.locking.Lock;

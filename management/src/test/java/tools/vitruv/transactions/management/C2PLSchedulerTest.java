@@ -1,3 +1,5 @@
+package tools.vitruv.transactions.management;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -8,10 +10,10 @@ import allElementTypes.Root;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EObject;
-import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import tools.vitruv.change.atomic.uuid.AtomicEChangeUuidResolver;
@@ -27,7 +29,6 @@ import tools.vitruv.framework.views.ViewTypeFactory;
 import tools.vitruv.framework.vsum.VirtualModel;
 import tools.vitruv.framework.vsum.VirtualModelBuilder;
 import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
-import tools.vitruv.transactions.management.TransactionStatusTracker;
 import tools.vitruv.transactions.management.locking.C2PLScheduler;
 
 public class C2PLSchedulerTest {
@@ -108,7 +109,7 @@ public class C2PLSchedulerTest {
     scheduler.admitTransaction(getFirstChange());
     scheduler.runNextStep();
 
-    var newRoot = getRoot();
+    var newRoot = getRoot().get();
     // Second transaction: Create a new NonRoot and insert it.
     NonRoot newNonRoot = AllElementTypesCreators.aet.NonRoot();
     newNonRoot.setId("fools");
@@ -133,35 +134,39 @@ public class C2PLSchedulerTest {
     assertFalse(newRoot.getMultiValuedContainmentEReference().isEmpty());
   }
 
-  private @NonNull Root getRoot() {
+  private Optional<Root> getRoot() {
     return environment.createSelector(
             ViewTypeFactory.createIdentityMappingViewType("Root")
         )
         .getSelectableElements()
         .stream().filter(e -> e instanceof Root)
         .map(e -> (Root) e)
-        .findFirst()
-        .get();
+        .findFirst();
+
   }
 
-  private @NonNull NonRoot getNonRoot() {
+  private Optional<NonRoot> getNonRoot() {
     return environment.createSelector(
             ViewTypeFactory.createIdentityMappingViewType("Root")
         )
         .getSelectableElements()
         .stream().filter(e -> e instanceof NonRoot)
         .map(e -> (NonRoot) e)
-        .findFirst()
-        .get();
+        .findFirst();
   }
 
+  /**
+   * Tests that the scheduler rolls back a transaction correctly, when required.
+   *
+   * @param testPath {@link Path}
+   */
   @Test
   void testCorrectUndoHandling(@TempDir Path testPath) {
     setupMultiModelEnvironment(testPath);
 
     var scheduler = new C2PLScheduler(environment);
-    var root = getRoot();
-    var nonRoot = getNonRoot();
+    var root = getRoot().get();
+    var nonRoot = getNonRoot().get();
     var observer = new TransactionStatusTracker<EObject>();
     scheduler.addListener(observer);
 
@@ -179,6 +184,7 @@ public class C2PLSchedulerTest {
 
     // Transaction 1 -> delete Root
     var vitruvChange1 = CommonCreatorClasses.createTransactionFrom(List.of(
+        CommonCreatorClasses.getRemoveRootEObjectChange(root),
         CommonCreatorClasses.getDeleteRootEObjectChange(root))
     );
 
@@ -195,6 +201,10 @@ public class C2PLSchedulerTest {
     // T1 succeeds, T2 does not
     assertTrue(observer.getCommitedTransactions().contains(transaction1));
     assertTrue(observer.getAbortedTransactions().contains(transaction2));
+
+    // Root does not exist
+    var root2 = getRoot();
+    assertFalse(root2.isPresent());
   }
 
 }

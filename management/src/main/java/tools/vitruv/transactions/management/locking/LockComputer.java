@@ -1,21 +1,23 @@
 package tools.vitruv.transactions.management.locking;
 
-import lombok.experimental.UtilityClass;
+import java.util.List;
 import tools.vitruv.change.atomic.EChange;
 import tools.vitruv.change.atomic.eobject.CreateEObject;
 import tools.vitruv.change.atomic.eobject.DeleteEObject;
 import tools.vitruv.change.atomic.feature.attribute.ReplaceSingleValuedEAttribute;
 import tools.vitruv.change.atomic.feature.reference.InsertEReference;
 import tools.vitruv.change.atomic.feature.reference.RemoveEReference;
-
-import java.util.List;
+import tools.vitruv.change.atomic.root.InsertRootEObject;
+import tools.vitruv.change.atomic.root.RemoveRootEObject;
 
 /**
  * Utility class that computes lists of {@link Lock}s that an operation/{@link EChange}
  * must acquire to be admitted.
  */
-@UtilityClass
+
 public final class LockComputer {
+  private LockComputer() {}
+
   /**
    * Computes the required {@link Lock}s that an {@link EChange} requires.
    *
@@ -46,11 +48,21 @@ public final class LockComputer {
           new FeatureLock<>(a.getAffectedElement(), a.getAffectedFeature())
       );
     }
-    if (change instanceof RemoveEReference<E> d) {
+    if (change instanceof RemoveEReference<E> r) {
       return List.of(
-          new ElementLock<>(d.getAffectedElement(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
-          new ElementLock<>(d.getOldValue(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
-          new FeatureLock<>(d.getAffectedElement(), d.getAffectedFeature())
+          new ElementLock<>(r.getAffectedElement(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
+          new ElementLock<>(r.getOldValue(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
+          new FeatureLock<>(r.getAffectedElement(), r.getAffectedFeature())
+      );
+    }
+    if (change instanceof InsertRootEObject<E> iR) {
+      return List.of(
+          new ElementLock<>(iR.getNewValue(), LockMode.EXCLUSIVE)
+      );
+    }
+    if (change instanceof RemoveRootEObject<E> rR) {
+      return List.of(
+          new ElementLock<>(rR.getOldValue(), LockMode.EXCLUSIVE)
       );
     }
     return List.of();

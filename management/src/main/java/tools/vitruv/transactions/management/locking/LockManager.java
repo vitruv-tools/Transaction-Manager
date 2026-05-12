@@ -55,11 +55,7 @@ public class LockManager<E> {
 
   /**
    * Attempts to acquire all locks that the next {@link EChange} of {@code transaction} requires.
-   * If the lock request fails, returns a mapping of:
-   * <ol>
-   *  <li>the lock that cannot be acquired,</li>
-   *  <li>the other transactions blocking {@code transaction}.</li>
-   * </ol>
+   * If the lock request fails, returns the set of other transactions blocking {@code transaction}.
    *
    * @param transactionState - {@link TransactionState}
    * @return {@link Optional}

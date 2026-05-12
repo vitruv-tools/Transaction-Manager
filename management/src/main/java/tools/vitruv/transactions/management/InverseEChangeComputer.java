@@ -1,6 +1,7 @@
 package tools.vitruv.transactions.management;
 
 import lombok.experimental.UtilityClass;
+import org.eclipse.emf.ecore.EObject;
 import tools.vitruv.change.atomic.EChange;
 import tools.vitruv.change.atomic.TypeInferringAtomicEChangeFactory;
 import tools.vitruv.change.atomic.eobject.CreateEObject;
@@ -9,6 +10,8 @@ import tools.vitruv.change.atomic.eobject.EobjectFactory;
 import tools.vitruv.change.atomic.feature.attribute.ReplaceSingleValuedEAttribute;
 import tools.vitruv.change.atomic.feature.reference.InsertEReference;
 import tools.vitruv.change.atomic.feature.reference.RemoveEReference;
+import tools.vitruv.change.atomic.root.InsertRootEObject;
+import tools.vitruv.change.atomic.root.RemoveRootEObject;
 
 /**
  * Utility class that computes inverse {@link EChange}s for undoing {@link TransactionState}s
@@ -61,6 +64,20 @@ public class InverseEChangeComputer {
           remove.getAffectedFeature(),
           remove.getOldValue(),
           remove.getIndex()
+      );
+    }
+    if (input instanceof InsertRootEObject<E> rootInsert) {
+      return (EChange<E>) eChangeFactory.createRemoveRootChange(
+          (EObject) rootInsert.getNewValue(),
+          rootInsert.getResource(),
+          rootInsert.getIndex()
+      );
+    }
+    if (input instanceof RemoveRootEObject<E> rootRemove) {
+      return (EChange<E>) eChangeFactory.createInsertRootChange(
+          (EObject) rootRemove.getOldValue(),
+          rootRemove.getResource(),
+          rootRemove.getIndex()
       );
     }
     throw new IllegalArgumentException(String.format("Change type %s is unknown!",
