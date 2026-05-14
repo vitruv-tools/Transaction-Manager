@@ -4,6 +4,7 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import lombok.Getter;
 import tools.vitruv.framework.vsum.VirtualModel;
 import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
 import tools.vitruv.transactions.management.TransactionState;
@@ -29,9 +30,14 @@ public abstract class AbstractScheduler<E, T extends TransactionExecutorThread<E
    */
   protected final InternalVirtualModel multiModelEnvironment;
   /**
+   * Maximum number of concurrently running transactions on {@code transactionThreadService}.
+   */
+  @Getter
+  protected final int maximumConcurrentNumberOfThreads;
+  /**
    * Executor service for transaction threads.
    */
-  protected final ExecutorService transactionThreadService = Executors.newSingleThreadExecutor();
+  protected final ExecutorService transactionThreadService;
 
   @Override
   public VirtualModel getMultiModelEnvironment() {
@@ -47,10 +53,13 @@ public abstract class AbstractScheduler<E, T extends TransactionExecutorThread<E
   /**
    * Creates a new {@link AbstractScheduler}.
    *
-   * @param multiModelEnvironment - {@link VirtualModel}
+   * @param multiModelEnvironment {@link VirtualModel}
+   * @param maximumConcurrentNumberOfThreads int
    */
-  protected AbstractScheduler(InternalVirtualModel multiModelEnvironment) {
+  protected AbstractScheduler(InternalVirtualModel multiModelEnvironment, int maximumConcurrentNumberOfThreads) {
     this.multiModelEnvironment = multiModelEnvironment;
+    this.maximumConcurrentNumberOfThreads = maximumConcurrentNumberOfThreads;
+    transactionThreadService = Executors.newFixedThreadPool(maximumConcurrentNumberOfThreads);
   }
 
   /**

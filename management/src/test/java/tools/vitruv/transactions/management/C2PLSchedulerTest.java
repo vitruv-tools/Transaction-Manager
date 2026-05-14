@@ -107,7 +107,7 @@ public class C2PLSchedulerTest {
   void testCorrectApplicationOfOneChange(@TempDir Path testPath)
       throws IOException {
     setupMultiModelEnvironment(testPath);
-    var scheduler = new C2PLScheduler(environment);
+    var scheduler = new C2PLScheduler(environment, 1);
 
     // Apply transaction, check that it has been applied correctly.
     scheduler.admitTransaction(getFirstChange());
@@ -180,7 +180,7 @@ public class C2PLSchedulerTest {
     }
 
     // Submit Transactions
-    var scheduler = new C2PLScheduler(environment);
+    var scheduler = new C2PLScheduler(environment, 2);
     var transactionStatusTracker = new TransactionStatusTracker<EObject>();
     scheduler.addListener(transactionStatusTracker);
 
@@ -193,6 +193,11 @@ public class C2PLSchedulerTest {
     scheduler.waitForApplicationOfRunningTransactions();
     var committedTransactions = transactionStatusTracker.getCommitedTransactions();
     assertEquals(counter, committedTransactions.size());
+
+    // Check for application
+    root = getRoot().get();
+    var nonRoots = root.getMultiValuedContainmentEReference();
+    assertEquals(counter, nonRoots.size());
   }
 
   static List<EChange<EObject>> createNonRootAndInsertionTransaction(int counter, Root root) {
@@ -230,7 +235,7 @@ public class C2PLSchedulerTest {
   void testCorrectUndoHandling(@TempDir Path testPath) {
     setupMultiModelEnvironment(testPath);
 
-    var scheduler = new C2PLScheduler(environment);
+    var scheduler = new C2PLScheduler(environment, 1);
     var root = getRoot().get();
     var nonRoot = getNonRoot().get();
     var observer = new TransactionStatusTracker<EObject>();

@@ -10,9 +10,12 @@ import tools.vitruv.transactions.management.TransactionState;
  * <p>Takes complete {@link VitruviusChange}s and ensures their transactional
  * application on a {@link VirtualModel}, which acts as multi-model environment.
  *
- * <p>Schedulers may process {@link VitruviusChange}s asynchronously. Schedulers inform other parties
- * through the {@link SchedulingEventObserver} interface when transactions finish
- * (either through commit or abort).
+ * <p>Schedulers may process {@link VitruviusChange}s asynchronously.
+ * Schedulers inform other parties through the {@link SchedulingEventObserver} interface
+ * when transactions finish (either through commit or abort).
+ *
+ * <p>Schedulers delegate the application of transactions to {@link TransactionExecutorThread}s.
+ * Multiple transactions may run concurrently.
  *
  * @param <E> - Type of model elements an environment holds.
  * @param <T> - Type of transaction executor threads.
@@ -24,6 +27,14 @@ public interface Scheduler<E, T extends TransactionExecutorThread<E>> {
    * @return multiModelEnvironment - {@link VirtualModel}
    */
   VirtualModel getMultiModelEnvironment();
+
+  /**
+   * Returns the maximum number of {@link TransactionExecutorThread}s that may apply
+   * a transaction on {@link Scheduler#getMultiModelEnvironment} at the same time.
+   *
+   * @return int
+   */
+  int getMaximumConcurrentNumberOfThreads();
 
   /**
    * Admits {@code change} and starts to execute the {@link TransactionExecutorThread}

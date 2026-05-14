@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import javax.swing.text.html.Option;
 import tools.vitruv.change.atomic.EChange;
 import tools.vitruv.change.composite.description.VitruviusChange;
 import tools.vitruv.transactions.management.TransactionState;
@@ -124,7 +125,11 @@ public class LockManager<E> {
     }
 
     // Return all locking transactions.
-    return Optional.of(holdingTransactions);
+    if (holdingTransactions.size() > 0) {
+      return Optional.of(holdingTransactions);
+    } else {
+      return Optional.empty();
+    }
   }
 
 

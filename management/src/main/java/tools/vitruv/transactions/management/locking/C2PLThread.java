@@ -2,6 +2,7 @@ package tools.vitruv.transactions.management.locking;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -71,7 +72,7 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
             this.transactionState,
                 blockingTransactions.get())
         );
-        return new Result<>(TransactionStatus.BLOCKED, Collections.emptyList());
+        return new Result<>(transactionState.getStatus(), List.of());
       }
     }
 

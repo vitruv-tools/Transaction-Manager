@@ -5,6 +5,9 @@ import static com.google.common.base.Preconditions.checkState;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.locks.AbstractQueuedLongSynchronizer;
+import java.util.concurrent.locks.AbstractQueuedSynchronizer;
+import java.util.concurrent.locks.Condition;
 import lombok.AccessLevel;
 import lombok.Data;
 import lombok.Setter;
@@ -24,7 +27,7 @@ class TransactionLockingData<E> {
   @Setter(AccessLevel.NONE)
   private boolean unlocking = false;
   /**
-   * Set of locks  the transaction currently holds.
+   * Set of locks the transaction currently holds.
    */
   private final Set<Lock<E>> heldLocks = new HashSet<>();
   /**

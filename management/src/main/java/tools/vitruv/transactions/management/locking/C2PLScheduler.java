@@ -24,9 +24,11 @@ public class C2PLScheduler extends AbstractScheduler<EObject, C2PLThread> {
    * Creates a new {@link C2PLScheduler}.
    *
    * @param multiModelEnvironment - {@link VirtualModel}
+   * @param maximumConcurrentNumberOfThreads int
    */
-  public C2PLScheduler(InternalVirtualModel multiModelEnvironment) {
-    super(multiModelEnvironment);
+  public C2PLScheduler(InternalVirtualModel multiModelEnvironment,
+                       int maximumConcurrentNumberOfThreads) {
+    super(multiModelEnvironment, maximumConcurrentNumberOfThreads);
   }
 
   @Override
