@@ -57,7 +57,13 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
    *        {@link TransactionStatus#COMMITED}, also the unblocked transactions.
    */
   @Override
-  public TransactionExecutorThread.Result<EObject> call() {
+  public TransactionExecutorThread.Result<EObject> call() throws InterruptedException {
+    // In case of resubmits, check if we have been finished already
+    var currentStatus = transactionState.getStatus();
+    if (currentStatus != TransactionStatus.STARTED && currentStatus != TransactionStatus.BLOCKED) {
+      return new Result<>(TransactionStatus.COMMITED, List.of());
+    }
+
     observers.forEach(observer -> observer.observeRunning(transactionState));
     transactionState.setToRunning();
 
@@ -97,7 +103,7 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
     }
 
     // Release all locks
-    releaseAllLocks();
+    releaseAllLocks(true);
     finishExecutionOfEChanges();
 
     var unblockedTransactions = new ArrayList<TransactionState<EObject>>();
@@ -118,8 +124,8 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
    *
    * @param blockingTransactions - {@link Set}
    */
-  private void handleBlock(Set<TransactionState<EObject>> blockingTransactions) {
-    releaseAllLocks();
+  private void handleBlock(Set<TransactionState<EObject>> blockingTransactions) throws InterruptedException {
+    releaseAllLocks(false);
     // Go back to the start of the transaction, do not execute anything
     while (transactionState.goToPreviousOperationForExecutionCheck()) {
       continue;
@@ -128,9 +134,12 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
 
   /**
    * Releases all held locks.
+   *
+   * @param shrinking - {@link Boolean}
    */
-  private void releaseAllLocks() {
-    var locksToRelease = lockManager.getLocksHeldBy(transactionState);
-    locksToRelease.forEach(lock -> lockManager.releaseLock(lock, transactionState));
+  private void releaseAllLocks(boolean shrinking) throws InterruptedException {
+    for (var lock : lockManager.getLocksHeldBy(transactionState)) {
+      lockManager.releaseLock(lock, transactionState, shrinking);
+    }
   }
 }

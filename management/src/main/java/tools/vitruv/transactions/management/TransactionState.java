@@ -17,6 +17,7 @@ public class TransactionState<Element> {
   /**
    * The underlying change that is executed.
    */
+  @Getter
   private final VitruviusChange<Element> underlyingChange;
   /**
    * Execution status of this transaction.

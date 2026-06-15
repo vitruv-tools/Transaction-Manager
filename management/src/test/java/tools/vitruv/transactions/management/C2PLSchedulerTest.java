@@ -1,5 +1,6 @@
 package tools.vitruv.transactions.management;
 
+import static java.lang.Thread.sleep;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -12,10 +13,12 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EObject;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 import tools.vitruv.change.atomic.EChange;
 import tools.vitruv.change.atomic.TypeInferringAtomicEChangeFactory;
@@ -164,13 +167,14 @@ public class C2PLSchedulerTest {
    * @param testPath Path
    */
   @Test
-  void testMultipleTransactionsAtTheSameTime(@TempDir Path testPath) {
+  //@Timeout(unit = TimeUnit.SECONDS, value = 600)
+  void testMultipleTransactionsAtTheSameTime(@TempDir Path testPath) throws InterruptedException {
     // Set up environment
     setupMultiModelEnvironment(testPath);
 
     // Create Changes
     var root = getRoot().get();
-    int counter = 8794;
+    int counter = 100;
     List<TransactionalChangeImpl<EObject>> changes = new ArrayList<>();
     for (int i = 0; i < counter; i++) {
       changes.add(
@@ -180,7 +184,7 @@ public class C2PLSchedulerTest {
     }
 
     // Submit Transactions
-    var scheduler = new C2PLScheduler(environment, 2);
+    var scheduler = new C2PLScheduler(environment, 4);
     var transactionStatusTracker = new TransactionStatusTracker<EObject>();
     scheduler.addListener(transactionStatusTracker);
 

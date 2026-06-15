@@ -4,6 +4,7 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import lombok.Getter;
 import tools.vitruv.framework.vsum.VirtualModel;
 import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
@@ -21,6 +22,11 @@ import tools.vitruv.transactions.management.TransactionState;
  */
 public abstract class AbstractScheduler<E, T extends TransactionExecutorThread<E>>
     implements Scheduler<E, T> {
+  /**
+   * Counter for submitted tasks.
+   * Used to determine _when_ to shut down the {@code transactionThreadService}.
+   */
+  protected final AtomicInteger submittedTasksCounter = new AtomicInteger(0);
   /**
    * Timeout in milliseconds given for termination.
    */
@@ -90,9 +96,19 @@ public abstract class AbstractScheduler<E, T extends TransactionExecutorThread<E
    */
   @Override
   public boolean waitForApplicationOfRunningTransactions() {
+    // Wait for all threads to stop executing
+    synchronized (submittedTasksCounter) {
+      while (!submittedTasksCounter.compareAndSet(0, 0)) {
+        try {
+          submittedTasksCounter.wait();
+        } catch (InterruptedException e) {}
+      }
+    }
+
     transactionThreadService.shutdown();
     try {
-      return transactionThreadService.awaitTermination(AbstractScheduler.SHUTDOWN_TIMEOUT, TimeUnit.MICROSECONDS);
+      return transactionThreadService.awaitTermination(AbstractScheduler.SHUTDOWN_TIMEOUT,
+          TimeUnit.MICROSECONDS);
     } catch (InterruptedException e) {
       return false;
     }

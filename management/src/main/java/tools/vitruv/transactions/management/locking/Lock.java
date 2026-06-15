@@ -1,5 +1,6 @@
 package tools.vitruv.transactions.management.locking;
 
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import org.eclipse.emf.ecore.EObject;

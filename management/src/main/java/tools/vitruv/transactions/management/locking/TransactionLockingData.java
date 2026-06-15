@@ -46,15 +46,24 @@ class TransactionLockingData<E> {
   }
 
   /**
-   * Removes {@code lock} from the {@link TransactionLockingData#heldLocks}, and marks this
-   * transaction as unlocking/shrinking.
+   * Removes {@code lock} from the {@link TransactionLockingData#heldLocks}.
+   * If requested, also marks the transaction as unlocking/shrinking.
+   *
+   * <p>Under some locking schemes, e.g. C2PL, a transaction may only acquire all locks at once,
+   * or must not execute otherwise. We emulate such behavior by having a non-shrinking unregister
+   * in case the transaction is blocked.
+   *
+   * <p>Crucially, after a shrinking/unlocking unregister, non-shrinking unregisters are not permitted.
    *
    * @param lock - {@link Lock}
+   * @param shrinking - boolean
    */
-  void unregisterLock(Lock<E> lock) {
+  void unregisterLock(Lock<E> lock, boolean shrinking) {
+    checkArgument(shrinking || !unlocking,
+        "Must not release a lock in non-shrinking mode right now!");
     checkArgument(heldLocks.contains(lock), "Cannot release the lock for this transaction!");
     heldLocks.remove(lock);
-    unlocking = true;
+    unlocking |= shrinking;
   }
 
   /**

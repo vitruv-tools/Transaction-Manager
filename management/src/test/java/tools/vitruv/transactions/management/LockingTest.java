@@ -16,8 +16,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
+import javax.swing.text.html.Option;
 import lombok.Getter;
 import org.eclipse.emf.common.command.Command;
 import org.eclipse.emf.ecore.EObject;
@@ -139,7 +141,7 @@ public class LockingTest {
    * After this, it can be commited.
    */
   @Test
-  void testLifecycleOfOneTransaction() {
+  void testLifecycleOfOneTransaction() throws InterruptedException{
     List<? extends EChange<EObject>> changes = List.of(
             CommonCreatorClasses.getRootIntegerReplaceSingleValuedEAttributeChange(
                     CommonCreatorClasses.ROOT
@@ -176,7 +178,7 @@ public class LockingTest {
 
     // Unlock everything
     for (var lock : locksHeldByTransaction) {
-      lockManager.releaseLock(lock, transaction);
+      lockManager.releaseLock(lock, transaction, true);
     }
     // Commit
     lockManager.commit(transaction);
@@ -184,7 +186,7 @@ public class LockingTest {
   }
 
   @Test
-  void testsForNoLockConflicts() {
+  void testsForNoLockConflicts() throws InterruptedException {
     assertLockCompatibility(
             CommonCreatorClasses.getIdentifiedInsertReferenceChange(),
             CommonCreatorClasses.getRootIntegerReplaceSingleValuedEAttributeChange(
@@ -238,7 +240,7 @@ public class LockingTest {
   }
 
   @Test
-  void testsForLockConflicts() {
+  void testsForLockConflicts() throws InterruptedException {
     assertLockConflict(
             CommonCreatorClasses.getIdentifiedRemoveEReferenceChange(),
             CommonCreatorClasses.getIdentifiedInsertReferenceChange()
@@ -260,7 +262,7 @@ public class LockingTest {
   }
 
   @Test
-  void testSingleTransactionUnlocking() {
+  void testSingleTransactionUnlocking() throws InterruptedException{
     // Create transaction, with two operations
     var transaction1 = lockManager.submitTransaction(
         new TransactionalChangeImpl<>(
@@ -292,7 +294,7 @@ public class LockingTest {
 
     // Release each lock for the first operation
     for (var lockOfT1Op1 : currentLocks) {
-      lockManager.releaseLock(lockOfT1Op1, transaction1);
+      lockManager.releaseLock(lockOfT1Op1, transaction1, true);
     }
     // Transaction 1 must not hold locks now
     assertTrue(lockManager.getLocksHeldBy(transaction1).isEmpty());
@@ -314,7 +316,7 @@ public class LockingTest {
             () -> lockManager.acquireLocksForNextOperation(transaction1));
   }
 
-  void assertLockConflict(EChange<EObject> change1, EChange<EObject> change2) {
+  void assertLockConflict(EChange<EObject> change1, EChange<EObject> change2) throws InterruptedException{
     setup();
     // Create two transactions
     var transaction1 = lockManager.submitTransaction(
@@ -338,7 +340,7 @@ public class LockingTest {
     assertTrue(lockManager.getLocksHeldBy(transaction2).isEmpty());
   }
 
-  void assertLockCompatibility(EChange<EObject> change1, EChange<EObject> change2) {
+  void assertLockCompatibility(EChange<EObject> change1, EChange<EObject> change2) throws InterruptedException {
     setup();
     // Create two transactions
     var transaction1 = lockManager.submitTransaction(
@@ -362,7 +364,7 @@ public class LockingTest {
   }
 
   @Test
-  void testLockUpgrade() {
+  void testLockUpgrade() throws InterruptedException {
     var transaction1 = lockManager.submitTransaction(
         new TransactionalChangeImpl<>(
             List.of(
@@ -379,7 +381,9 @@ public class LockingTest {
     transaction1.setToRunning();
     var locks = lockManager.computeNextLocksFor(transaction1);
     transaction1.markNextOperationAsExecutable();
-    locks.forEach(lock -> lockManager.setLock(lock, transaction1));
+    for (var lock: locks) {
+      lockManager.testLock(lock, transaction1);
+    }
 
     assertEquals(2, locks.size());
     assertLock(locks,
@@ -393,7 +397,9 @@ public class LockingTest {
     // T1 -> second operation, X locks on ROOT and on EAttribute
     var locksOp2 = lockManager.computeNextLocksFor(transaction1);
     transaction1.markNextOperationAsExecutable();
-    locksOp2.forEach(lock -> lockManager.setLock(lock, transaction1));
+    for (var lock : locksOp2) {
+      lockManager.testLock(lock, transaction1);
+    }
     var locksOfT1 = lockManager.getLocksHeldBy(transaction1);
     assertEquals(2, locksOfT1.size());
     assertLock(locksOfT1, CommonCreatorClasses.ROOT, LockMode.EXCLUSIVE, null);
@@ -451,7 +457,7 @@ public class LockingTest {
   }
 
   @Test
-  void testC2PLBlockingResolutionStrategy() {
+  void testC2PLBlockingResolutionStrategy() throws InterruptedException {
     // Force block
     lockManager.submitTransaction(
             new TransactionalChangeImpl<>(
@@ -529,7 +535,7 @@ public class LockingTest {
     }
 
     @Override
-    public void run() {
+    public void run()  {
       try {
         var waitInMs = new Random().nextInt(50);
         System.out.println("Waiting for " + waitInMs + " milliseconds");
@@ -546,7 +552,12 @@ public class LockingTest {
       ));
       transactionState.setToRunning();
       // Request locks
-      var blockingTransactions = manager.acquireLocksForNextOperation(transactionState);
+      Optional<Set<TransactionState<EObject>>> blockingTransactions = Optional.empty();
+      try {
+        blockingTransactions = manager.acquireLocksForNextOperation(transactionState);
+      } catch (InterruptedException e) {
+        System.out.println("oops");
+      }
       if (blockingTransactions.isPresent()) {
         var status = transactionState.getStatus();
         assertSame(BLOCKED, status, () -> "Transaction should be blocked, but is %s" + status);
@@ -601,7 +612,7 @@ public class LockingTest {
    * Another transaction, T3, should not be unblocked by T1, only T2.
    */
   @Test
-  void testUnblockingBehavior() {
+  void testUnblockingBehavior() throws InterruptedException {
     // T1 to T3 have the same content
     var change1 = CommonCreatorClasses.createTransactionFrom(List.of(
         CommonCreatorClasses.getRootIntegerReplaceSingleValuedEAttributeChange(
@@ -636,8 +647,9 @@ public class LockingTest {
     assertTrue(blockingForT1.contains(t2));
 
     // Commit T2
-    lockManager.getLocksHeldBy(t2)
-          .forEach(lock -> lockManager.releaseLock(lock, t2));
+    for (var lock : lockManager.getLocksHeldBy(t2)) {
+      lockManager.releaseLock(lock, t2, true);
+    }
     var unblockedTransactions = lockManager.commit(t2);
     assertEquals(1, unblockedTransactions.size());
     assertTrue(unblockedTransactions.contains(t1));
@@ -687,7 +699,7 @@ public class LockingTest {
    * </ol>
    */
   @Test
-  void testLockingBehaviorOfAbortingTransactions() {
+  void testLockingBehaviorOfAbortingTransactions() throws InterruptedException{
     var root = CommonCreatorClasses.ROOT;
 
     var transactionToAbort = lockManager.submitTransaction(
@@ -725,8 +737,9 @@ public class LockingTest {
     transactionToAbort.getNextInverseOperation();
     assertThrows(IllegalStateException.class, transactionToAbort::getNextInverseOperation);
     // Unlock and Abort
-    lockManager.getLocksHeldBy(transactionToAbort).forEach(
-            lock -> lockManager.releaseLock(lock, transactionToAbort));
+    for (var lock : lockManager.getLocksHeldBy(transactionToAbort)) {
+      lockManager.releaseLock(lock, transactionToAbort, true);
+    }
     lockManager.abort(transactionToAbort);
     // Check that transaction has been aborted.
   }
