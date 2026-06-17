@@ -213,7 +213,8 @@ public class LockManager<E> {
     return unblockTransactionsBlockedBy(transactionState);
   }
 
-  private List<TransactionState<E>> unblockTransactionsBlockedBy(TransactionState<E> transactionState) {
+  private synchronized List<TransactionState<E>> unblockTransactionsBlockedBy(
+      TransactionState<E> transactionState) {
     // Cleanup
     transactionData.remove(transactionState);
     // Collect unblocked transactions

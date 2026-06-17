@@ -83,7 +83,6 @@ class TransactionLockingData<E> {
    *      true if and only if the managed transaction does not wait on other transactions.
    */
   boolean unblock(TransactionState<E> unlockingTransactionState) {
-    waitsFor.remove(unlockingTransactionState);
-    return waitsFor.isEmpty();
+    return waitsFor.remove(unlockingTransactionState) && waitsFor.isEmpty();
   }
 }

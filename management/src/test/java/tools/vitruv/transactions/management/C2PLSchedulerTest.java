@@ -184,7 +184,7 @@ public class C2PLSchedulerTest {
     }
 
     // Submit Transactions
-    var scheduler = new C2PLScheduler(environment, 4);
+    var scheduler = new C2PLScheduler(environment, 3);
     var transactionStatusTracker = new TransactionStatusTracker<EObject>();
     scheduler.addListener(transactionStatusTracker);
 

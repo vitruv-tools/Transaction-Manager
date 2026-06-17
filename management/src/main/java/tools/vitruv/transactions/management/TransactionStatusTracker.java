@@ -3,6 +3,8 @@ package tools.vitruv.transactions.management;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import lombok.Getter;
 import tools.vitruv.transactions.management.scheduling.SchedulingEventObserver;
@@ -31,6 +33,12 @@ public class TransactionStatusTracker<E> implements SchedulingEventObserver<E> {
   }
 
   @Override
+  public void observeBlockOf(TransactionState<E> blocked,
+                             Collection<TransactionState<E>> blocking) {
+    System.out.println("Transaction " + blocked + " is blocked!");
+  }
+
+  @Override
   public void observeRunning(TransactionState<E> running) {
     activeTransactions.add(running);
   }
@@ -40,6 +48,7 @@ public class TransactionStatusTracker<E> implements SchedulingEventObserver<E> {
     assertTrue(activeTransactions.remove(aborting),
         "Trying to abort a transaction that is not running!");
     abortedTransactions.add(aborting);
+    System.out.println("Aborted transaction " + aborting);
   }
 
   @Override
@@ -47,5 +56,6 @@ public class TransactionStatusTracker<E> implements SchedulingEventObserver<E> {
     assertTrue(activeTransactions.remove(commited),
         "Trying to commit a transaction that is not running!");
     commitedTransactions.add(commited);
+    System.out.println("Commited transaction " + commited);
   }
 }
