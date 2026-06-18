@@ -5,7 +5,9 @@ import static com.google.common.base.Preconditions.checkState;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -13,6 +15,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.Getter;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import tools.vitruv.change.composite.description.VitruviusChange;
 import tools.vitruv.framework.vsum.VirtualModel;
 import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
@@ -33,6 +37,11 @@ import tools.vitruv.transactions.management.locking.LockManager;
  */
 public abstract class AbstractScheduler<E, T extends TransactionExecutorThread<E>>
     implements Scheduler<E, T> {
+  /**
+   * Global logger instance.
+   */
+  private static final Logger LOGGER = LogManager.getLogger(AbstractScheduler.class);
+
   /**
    * The multi-model environment where transactions are applied on.
    */
@@ -131,9 +140,10 @@ public abstract class AbstractScheduler<E, T extends TransactionExecutorThread<E
     checkState(!this.finishExecution.get(),
         "Scheduler is shutting down and not accepting further changes!");
 
-    submittedTasksCounter.incrementAndGet();
+
     var newTransaction = lockManager.submitTransaction(change);
     observers.forEach(observer -> observer.observeAdmission(newTransaction));
+    submittedTasksCounter.incrementAndGet();
     var transactionThread = createNewExecutorThread(newTransaction);
     startExecutionOf(transactionThread);
     return newTransaction;
@@ -160,10 +170,12 @@ public abstract class AbstractScheduler<E, T extends TransactionExecutorThread<E
         throw new RuntimeException(e);
       }
 
-      if (result.status() == TransactionStatus.COMMITED || result.status() == TransactionStatus.ABORTED) {
+      // Finished transactions -> disregard them
+      if (result.status() == TransactionStatus.COMMITED
+          || result.status() == TransactionStatus.ABORTED) {
         submittedTasksCounter.decrementAndGet();
       }
-      // Resubmit all unblocked tasks
+      // Resubmit all unblocked tasks, unless they are duplicated
       for (var unblockedTransaction : result.unblockedTransactions()) {
         var newTransactionThread = createNewExecutorThread(unblockedTransaction);
         startExecutionOf(newTransactionThread);
@@ -202,7 +214,7 @@ public abstract class AbstractScheduler<E, T extends TransactionExecutorThread<E
       return true;
     }, this.transactionThreadService)
         .exceptionallyAsync(throwable -> {
-          System.err.println("Oops: " + throwable);
+          LOGGER.error("Transaction failed - gates to hell open: ", throwable);
           return false;
         });
   }

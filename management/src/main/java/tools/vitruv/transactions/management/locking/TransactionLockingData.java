@@ -67,7 +67,7 @@ class TransactionLockingData<E> {
   }
 
   /**
-   * Says that this transaction waits on {@code  otherTransactions}.
+   * Says that this transaction waits on {@code otherTransactions}.
    *
    * @param otherTransactions - {@link Set}
    */
@@ -80,7 +80,8 @@ class TransactionLockingData<E> {
    *
    * @param unlockingTransactionState - {@link TransactionState}
    * @return Boolean
-   *      true if and only if the managed transaction does not wait on other transactions.
+   *      true if and only if the managed transaction does not wait on other transactions
+   *      anymore.
    */
   boolean unblock(TransactionState<E> unlockingTransactionState) {
     return waitsFor.remove(unlockingTransactionState) && waitsFor.isEmpty();

@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.eclipse.emf.ecore.EObject;
 import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
 import tools.vitruv.transactions.management.TransactionState;
@@ -18,6 +20,10 @@ import tools.vitruv.transactions.management.scheduling.VitruviusTransactionExecu
  * A {@link C2PLThread} executes a {@link TransactionState} following the C2PL protocol.
  */
 public class C2PLThread extends VitruviusTransactionExecutorThread {
+  /**
+   * Global logger instance
+   */
+  private static final Logger LOGGER = LogManager.getLogger(C2PLThread.class);
   /**
    * The lock manager to consult for acquiring/releasing locks.
    */
@@ -89,6 +95,8 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
         super.applyEChangeForward();
       }
     } catch (IllegalArgumentException | IllegalStateException e) {
+      LOGGER.warn("Failed to apply operation for transaction {} due to {}, rolling back",
+          transactionState, e);
       // An operation failed to execute, undo the transaction
       transactionState.setToAborting();
       // Throw away failing operation

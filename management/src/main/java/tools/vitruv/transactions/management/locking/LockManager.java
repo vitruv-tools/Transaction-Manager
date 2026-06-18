@@ -41,11 +41,11 @@ public class LockManager<E> {
   /**
    * Manages lock information.
    */
-  private final Map<Lock<E>, LockData<E>> lockData = new HashMap<>();
+  private final ConcurrentMap<Lock<E>, LockData<E>> lockData = new ConcurrentHashMap<>();
   /**
    * Manages transaction information.
    */
-  private final Map<TransactionState<E>, TransactionLockingData<E>> transactionData = new HashMap<>();
+  private final ConcurrentMap<TransactionState<E>, TransactionLockingData<E>> transactionData = new ConcurrentHashMap<>();
 
   /**
    * Submits a new {@link VitruviusChange} to run as transaction.

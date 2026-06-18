@@ -35,11 +35,13 @@ public class InverseEChangeComputer {
     if (input instanceof CreateEObject<E> create) {
       var newDeleteEObjectChange = EobjectFactory.eINSTANCE.createDeleteEObject();
       newDeleteEObjectChange.setAffectedElement(create.getAffectedElement());
+      newDeleteEObjectChange.setAffectedElement(create.getAffectedElement());
       return (EChange<E>) newDeleteEObjectChange;
     }
     if (input instanceof DeleteEObject<E> delete) {
       var newCreateEObjectChange = EobjectFactory.eINSTANCE.createCreateEObject();
       newCreateEObjectChange.setAffectedElement(delete.getAffectedElement());
+      newCreateEObjectChange.setAffectedEObjectType(delete.getAffectedEObjectType());
       return (EChange<E>) newCreateEObjectChange;
     }
     if (input instanceof ReplaceSingleValuedEAttribute<E, ?> replace) {

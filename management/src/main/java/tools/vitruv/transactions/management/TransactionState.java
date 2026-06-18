@@ -213,7 +213,7 @@ public class TransactionState<Element> {
    */
   public boolean goToPreviousOperationForExecutionCheck() {
     checkState(status == TransactionStatus.BLOCKED,
-        "Can not go back to previous operation for non-blocking transactions!");
+        "Can not go back to previous operation for non-blocking transactions, transaction is " + status);
     var hasPrevious = operationToTestPointer.hasPrevious();
     if (hasPrevious) {
       peeking = operationToTestPointer.previous();
