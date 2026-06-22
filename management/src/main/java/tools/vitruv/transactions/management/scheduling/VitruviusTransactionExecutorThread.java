@@ -1,11 +1,16 @@
 package tools.vitruv.transactions.management.scheduling;
 
+import static com.google.common.base.Preconditions.checkState;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import org.eclipse.emf.ecore.EObject;
 import tools.vitruv.change.atomic.EChange;
+import tools.vitruv.change.atomic.command.internal.ApplyEChangeSwitch;
 import tools.vitruv.change.atomic.eobject.CreateEObject;
+import tools.vitruv.change.atomic.eobject.DeleteEObject;
+import tools.vitruv.change.atomic.feature.attribute.ReplaceSingleValuedEAttribute;
 import tools.vitruv.change.atomic.resolve.AtomicEChangeResolverHelper;
 import tools.vitruv.change.atomic.uuid.AtomicEChangeUuidResolver;
 import tools.vitruv.change.atomic.uuid.Uuid;
@@ -103,9 +108,23 @@ public abstract class VitruviusTransactionExecutorThread
    */
   protected EChange<Uuid> applyEChangeForward() {
     var eChange = transactionState.getNextOperationForExecution();
+    checkState(isApplicable(eChange), "EChange is not applicable, rollback required");
     var unresolvedChange = assignUuidToEChange(eChange);
-    changeResolver.resolveAndApplyForward(unresolvedChange);
+    ApplyEChangeSwitch.applyEChange(eChange, true);
+    updateEObjectToUUIDMapping(eChange, unresolvedChange);
     return unresolvedChange;
+  }
+
+  protected void updateEObjectToUUIDMapping(EChange<EObject> resolvedChange, EChange<Uuid> unresolvedChange) {
+    var uuidResolver = this.baseUuidResolver;
+    if (resolvedChange instanceof CreateEObject<EObject> createResolved
+        && unresolvedChange instanceof CreateEObject<Uuid> createUnresolved) {
+      uuidResolver.registerEObject(createUnresolved.getAffectedElement(), createResolved.getAffectedElement());
+    }
+    if (resolvedChange instanceof DeleteEObject<EObject> deleteResolved
+        && unresolvedChange instanceof DeleteEObject<Uuid> deleteUnresolved) {
+      uuidResolver.unregisterEObject(deleteUnresolved.getAffectedElement(), deleteResolved.getAffectedElement());
+    }
   }
 
   /**
@@ -116,9 +135,36 @@ public abstract class VitruviusTransactionExecutorThread
    */
   protected EChange<Uuid> applyEChangeBackward() {
     var eChangeToInvert = transactionState.getNextInverseOperation();
+    checkState(isApplicable(eChangeToInvert), "EChange is not applicable, rollback impossible!");
     var unresolvedInverseChange = assignUuidToEChange(eChangeToInvert);
-    changeResolver.resolveAndApplyForward(unresolvedInverseChange);
+    ApplyEChangeSwitch.applyEChange(eChangeToInvert, true);
+    updateEObjectToUUIDMapping(eChangeToInvert, unresolvedInverseChange);
     return unresolvedInverseChange;
+  }
+
+  /**
+   * Checks that {@code change} is applicable.
+   *
+   * <p>While Vitruvius handles most applicability conditions, we need this guarantee for
+   * {@code ReplaceSingleValuedEAttribute} changes: the {@code oldValue} must equal
+   * {@code change.getAffectedElement#eGet(change.getAffectedFeature)}.
+   *
+   * @param change - {@link EChange}
+   * @return boolean
+   */
+  private static boolean isApplicable(EChange<EObject> change) {
+    if (change instanceof ReplaceSingleValuedEAttribute<EObject, ?> replaceChange) {
+      var attribute    = replaceChange.getAffectedFeature();
+      var element      = replaceChange.getAffectedElement();
+      if (element.eClass().getFeatureID(attribute) == -1) {
+        return false;
+      }
+      var currentValue = element.eGet(attribute);
+      var expectedValue = replaceChange.getOldValue();
+      return (expectedValue == null && currentValue == null)
+          || (expectedValue != null && expectedValue.equals(currentValue));
+    }
+    return true;
   }
 
   /**

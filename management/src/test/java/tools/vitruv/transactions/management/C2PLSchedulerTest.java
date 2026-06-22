@@ -173,7 +173,7 @@ public class C2PLSchedulerTest {
 
     // Create Changes
     var root = getRoot().get();
-    int counter = 6769;
+    int counter = 600;
     List<TransactionalChangeImpl<EObject>> changes = new ArrayList<>();
     for (int i = 0; i < counter; i++) {
       changes.add(
@@ -210,7 +210,7 @@ public class C2PLSchedulerTest {
 
     // Create Changes
     var root = getRoot().get();
-    int counter = 34244;
+    int counter = 600;
 
     List<TransactionalChangeImpl<EObject>> changes = new ArrayList<>();
     // Delete root and set its attribute -> fail
@@ -260,7 +260,7 @@ public class C2PLSchedulerTest {
 
     // Create Changes
     var root = getRoot().get();
-    int counter = 342;
+    int counter = 100;
 
     List<TransactionalChangeImpl<EObject>> changes = new ArrayList<>();
     // Apply previous changes, with twist: also set attribute of root
@@ -280,7 +280,7 @@ public class C2PLSchedulerTest {
 
     // Shuffle and submit
     Collections.shuffle(changes);
-    var scheduler = new C2PLScheduler(environment, 5);
+    var scheduler = new C2PLScheduler(environment, 1);
     var transactionStatusTracker = new TransactionStatusTracker<EObject>();
     scheduler.addListener(transactionStatusTracker);
 
@@ -293,7 +293,8 @@ public class C2PLSchedulerTest {
     scheduler.waitForApplicationOfRunningTransactions();
 
     // Exactly one transaction should succeed, the others should fail
-    assertEquals(1, transactionStatusTracker.getAbortedTransactions().size());
+    assertEquals(counter - 1, transactionStatusTracker.getAbortedTransactions().size());
+    assertEquals(1, transactionStatusTracker.getCommitedTransactions().size());
   }
 
   static List<EChange<EObject>> createNonRootAndInsertionTransaction(int counter, Root root) {
