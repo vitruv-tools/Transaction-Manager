@@ -11,7 +11,7 @@
 [submodule "Vitruv-DSLs"]
 	path = Vitruv-DSLs
 	url = https://github.com/vitruv-tools/Vitruv-DSLs.git
-	branch = transaction
+	branch = vitruvocl
 	update = merge
 [submodule "emf-graph-gen"]
 	path = emf-graph-gen
