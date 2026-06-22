@@ -1,7 +1,7 @@
 package tools.vitruv.transactions.management.locking;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.emf.ecore.EObject;
+import tools.vitruv.dsls.vitruvOCL.pipeline.VitruvOCL;
 import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
 import tools.vitruv.transactions.management.TransactionState;
 import tools.vitruv.transactions.management.TransactionStatus;
@@ -16,18 +17,19 @@ import tools.vitruv.transactions.management.scheduling.SchedulingEventObserver;
 import tools.vitruv.transactions.management.scheduling.TransactionExecutorThread;
 import tools.vitruv.transactions.management.scheduling.VitruviusTransactionExecutorThread;
 
-/**
- * A {@link C2PLThread} executes a {@link TransactionState} following the C2PL protocol.
- */
+/** A {@link C2PLThread} executes a {@link TransactionState} following the C2PL protocol. */
 public class C2PLThread extends VitruviusTransactionExecutorThread {
-  /**
-   * Global logger instance
-   */
+  /** Global logger instance */
   private static final Logger LOGGER = LogManager.getLogger(C2PLThread.class);
-  /**
-   * The lock manager to consult for acquiring/releasing locks.
-   */
+
+  /** The lock manager to consult for acquiring/releasing locks. */
   private final LockManager<EObject> lockManager;
+
+  /**
+   * Path to the VitruvOCL constraints file to check after applying a transaction's operations, or
+   * empty if no consistency check should be performed.
+   */
+  private final Optional<Path> constraintsFile;
 
   /**
    * Creates a new {@link C2PLThread} for {@code transactionState} on {@code multiModelEnvironment}
@@ -38,29 +40,51 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
    * @param virtualModel {@link InternalVirtualModel}
    * @param lockManager {@link LockManager}
    */
-  public C2PLThread(TransactionState<EObject> transactionState,
-                    ConcurrentLinkedDeque<SchedulingEventObserver<EObject>> observers,
-                    InternalVirtualModel virtualModel,
-                    LockManager<EObject> lockManager) {
+  public C2PLThread(
+      TransactionState<EObject> transactionState,
+      ConcurrentLinkedDeque<SchedulingEventObserver<EObject>> observers,
+      InternalVirtualModel virtualModel,
+      LockManager<EObject> lockManager) {
+    this(transactionState, observers, virtualModel, lockManager, Optional.empty());
+  }
+
+  /**
+   * Creates a new {@link C2PLThread} for {@code transactionState} on {@code multiModelEnvironment}
+   * with {@code lockManager}, checking consistency against {@code constraintsFile} after applying
+   * the transaction's operations.
+   *
+   * @param transactionState {@link TransactionState}
+   * @param observers {@link ConcurrentLinkedDeque}
+   * @param virtualModel {@link InternalVirtualModel}
+   * @param lockManager {@link LockManager}
+   * @param constraintsFile path to a VitruvOCL constraints file, or empty to skip the check
+   */
+  public C2PLThread(
+      TransactionState<EObject> transactionState,
+      ConcurrentLinkedDeque<SchedulingEventObserver<EObject>> observers,
+      InternalVirtualModel virtualModel,
+      LockManager<EObject> lockManager,
+      Optional<Path> constraintsFile) {
     super(transactionState, observers, virtualModel);
     this.lockManager = lockManager;
+    this.constraintsFile = constraintsFile;
   }
 
   /**
    * Runs the scheduling algorithm, with the following steps.
    *
    * <ol>
-   *     <li>Attempt to acquire all locks.</li>
-   *     <li>If successful, execute the transaction on {@code multiModelEnvironment}.</li>
-   *     <li>Otherwise, block the transaction, returning {@link TransactionStatus#BLOCKED}</li>
-   *     <li>When an operation cannot be applied/an exception is thrown,
-   *     undo the entire transaction and return {@link TransactionStatus#ABORTED}</li>.
-   *     <li>When the transaction succeeds entirely, return {@link TransactionStatus#COMMITED}.</li>
+   *   <li>Attempt to acquire all locks.
+   *   <li>If successful, execute the transaction on {@code multiModelEnvironment}.
+   *   <li>Otherwise, block the transaction, returning {@link TransactionStatus#BLOCKED}
+   *   <li>When an operation cannot be applied/an exception is thrown, undo the entire transaction
+   *       and return {@link TransactionStatus#ABORTED}.
+   *   <li>When the transaction succeeds entirely, return {@link TransactionStatus#COMMITED}.
    * </ol>
    *
-   * @return result {@link TransactionExecutorThread.Result}
-   *        result contains the {@link TransactionStatus} described above, and in the case of
-   *        {@link TransactionStatus#COMMITED}, also the unblocked transactions.
+   * @return result {@link TransactionExecutorThread.Result} result contains the {@link
+   *     TransactionStatus} described above, and in the case of {@link TransactionStatus#COMMITED},
+   *     also the unblocked transactions.
    */
   @Override
   public TransactionExecutorThread.Result<EObject> call() throws InterruptedException {
@@ -80,10 +104,7 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
         handleBlock(blockingTransactions.get());
         // Inform observers about block
         observers.forEach(
-            observer -> observer.observeBlockOf(
-            this.transactionState,
-                blockingTransactions.get())
-        );
+            observer -> observer.observeBlockOf(this.transactionState, blockingTransactions.get()));
         return new Result<>(transactionState.getStatus(), List.of());
       }
     }
@@ -94,9 +115,12 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
       while (transactionState.hasExecutableOperations()) {
         super.applyEChangeForward();
       }
+      checkConsistency();
     } catch (IllegalArgumentException | IllegalStateException e) {
-      LOGGER.warn("Failed to apply operation for transaction {} due to {}, rolling back",
-          transactionState, e);
+      LOGGER.warn(
+          "Failed to apply operation for transaction {} due to {}, rolling back",
+          transactionState,
+          e);
       // An operation failed to execute, undo the transaction
       transactionState.setToAborting();
       // Throw away failing operation
@@ -127,12 +151,35 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
   }
 
   /**
-   * Handles a transaction block by releasing all locks that {@code transactionState} holds,
-   * marking none its operations to be executable, and informing all observers.
+   * Checks the constraints in {@link #constraintsFile} (if any) against {@link
+   * #multiModelEnvironment} after a transaction's operations have been applied.
+   *
+   * @throws IllegalStateException if any constraint is violated, so the caller rolls back the
+   *     transaction the same way as for a failed operation
+   */
+  private void checkConsistency() {
+    if (constraintsFile.isEmpty()) {
+      return;
+    }
+    VitruvOCL.registerVSUM(multiModelEnvironment);
+    var result = VitruvOCL.evaluateConstraints(constraintsFile.get());
+    if (!result.allSatisfied()) {
+      throw new IllegalStateException(
+          "Consistency check failed for transaction "
+              + transactionState
+              + ":\n"
+              + result.getDetailedReport());
+    }
+  }
+
+  /**
+   * Handles a transaction block by releasing all locks that {@code transactionState} holds, marking
+   * none its operations to be executable, and informing all observers.
    *
    * @param blockingTransactions - {@link Set}
    */
-  private void handleBlock(Set<TransactionState<EObject>> blockingTransactions) throws InterruptedException {
+  private void handleBlock(Set<TransactionState<EObject>> blockingTransactions)
+      throws InterruptedException {
     releaseAllLocks(false);
     // Go back to the start of the transaction, do not execute anything
     while (transactionState.goToPreviousOperationForExecutionCheck()) {

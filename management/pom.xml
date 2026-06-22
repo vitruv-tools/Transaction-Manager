@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-          <groupId>tools.vitruv</groupId>
-          <artifactId>tools.vitruv.transactions</artifactId>
-          <version>0.1.0-SNAPSHOT</version>
+        <groupId>tools.vitruv</groupId>
+        <artifactId>tools.vitruv.transactions</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>management</artifactId>
@@ -76,6 +76,10 @@
         <dependency>
             <groupId>tools.vitruv.multimodelocl</groupId>
             <artifactId>multimodelocl-language</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>tools.vitruv.dsls</groupId>
+            <artifactId>vitruvOCL-language</artifactId>
         </dependency>
     </dependencies>
     <build>
