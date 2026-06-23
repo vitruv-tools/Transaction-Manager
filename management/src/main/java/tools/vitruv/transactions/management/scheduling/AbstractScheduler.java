@@ -2,12 +2,12 @@ package tools.vitruv.transactions.management.scheduling;
 
 import static com.google.common.base.Preconditions.checkState;
 
+import java.nio.file.Path;
+import java.util.Optional;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -46,6 +46,11 @@ public abstract class AbstractScheduler<E, T extends TransactionExecutorThread<E
    * The multi-model environment where transactions are applied on.
    */
   protected final InternalVirtualModel multiModelEnvironment;
+  /**
+   * Path to a VitruvOCL constraints file to check after applying a transaction's operations,
+   * or empty if no consistency check should be performed.
+   */
+  protected final Optional<Path> constraintsFile;
 
   /**
    * Timeout in milliseconds given for termination.
@@ -100,10 +105,11 @@ public abstract class AbstractScheduler<E, T extends TransactionExecutorThread<E
    * @param maximumConcurrentNumberOfThreads int
    */
   protected AbstractScheduler(InternalVirtualModel multiModelEnvironment,
-                              int maximumConcurrentNumberOfThreads) {
+                              int maximumConcurrentNumberOfThreads, Optional<Path> constraintsFile) {
     this.multiModelEnvironment = multiModelEnvironment;
     this.maximumConcurrentNumberOfThreads = maximumConcurrentNumberOfThreads;
     transactionThreadService = Executors.newFixedThreadPool(maximumConcurrentNumberOfThreads);
+    this.constraintsFile = constraintsFile;
   }
 
   /**

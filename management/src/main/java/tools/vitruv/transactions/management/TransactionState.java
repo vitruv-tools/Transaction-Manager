@@ -190,7 +190,7 @@ public class TransactionState<Element> {
   }
 
   /**
-   * Returns the next operation/{@link EChange} to be undone, computing its inverse.
+   * Returns the next operation/{@link EChange} to be undone.
    *
    * @return {@link EChange}.
    */
@@ -201,7 +201,7 @@ public class TransactionState<Element> {
         "All operations have been inverted already!");
     var operationToInvert = operationToExecutePointer.previous();
     operationExecuteIndex--;
-    return InverseEChangeComputer.computeInverseOf(operationToInvert);
+    return operationToInvert;
   }
 
   /**

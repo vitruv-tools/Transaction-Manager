@@ -280,7 +280,7 @@ public class C2PLSchedulerTest {
 
     // Shuffle and submit
     Collections.shuffle(changes);
-    var scheduler = new C2PLScheduler(environment, 1);
+    var scheduler = new C2PLScheduler(environment, 4);
     var transactionStatusTracker = new TransactionStatusTracker<EObject>();
     scheduler.addListener(transactionStatusTracker);
 
@@ -331,7 +331,6 @@ public class C2PLSchedulerTest {
   @Test
   void testCorrectUndoHandling(@TempDir Path testPath) {
     setupMultiModelEnvironment(testPath);
-
     var scheduler = new C2PLScheduler(environment, 1);
     var root = getRoot().get();
     var nonRoot = getNonRoot().get();
@@ -370,4 +369,64 @@ public class C2PLSchedulerTest {
     assertFalse(root2.isPresent());
   }
 
+  /**
+   * Two transactions add the same reference, one fails.
+   * The effect of the other transaction should still be there,
+   */
+  @Test
+  void testCorrectUndoHandlingWithInsertAndRemoveEReferences(@TempDir Path testPath) {
+    setupMultiModelEnvironment(testPath);
+
+    var scheduler = new C2PLScheduler(environment, 4);
+    var root = getRoot().get();
+    var nonRoot = getNonRoot().get();
+    var observer = new TransactionStatusTracker<EObject>();
+    scheduler.addListener(observer);
+
+    // Transaction 1: add reference from Root to NonRoot
+    var change1 = CommonCreatorClasses.createTransactionFrom(List.of(
+        CommonCreatorClasses.E_CHANGE_FACTORY
+            .createInsertReferenceChange(
+                root,
+                AllElementTypesPackage.eINSTANCE.getRoot_MultiValuedContainmentEReference(),
+                nonRoot,
+                0
+            )
+      )
+    );
+    // Transaction 2: add the same reference, then set a value to 69
+    var change2 = CommonCreatorClasses.createTransactionFrom(List.of(
+        CommonCreatorClasses.E_CHANGE_FACTORY
+            .createInsertReferenceChange(
+                root,
+                AllElementTypesPackage.eINSTANCE.getRoot_MultiValuedContainmentEReference(),
+                nonRoot,
+                0
+            ),
+       CommonCreatorClasses.E_CHANGE_FACTORY
+           .createReplaceSingleAttributeChange(
+               root,
+               AllElementTypesPackage.eINSTANCE.getRoot_SingleValuedEAttribute(),
+               69,
+               67
+           )
+    ));
+
+    // Admit t1 and t2
+    var t1 = scheduler.admitTransaction(change1);
+    var t2 = scheduler.admitTransaction(change2);
+
+    // Wait for execution
+    scheduler.waitForApplicationOfRunningTransactions();
+
+    // t1 succeeds, t2 does not
+    assertTrue(observer.getCommitedTransactions().containsKey(t1));
+    assertTrue(observer.getAbortedTransactions().containsKey(t2));
+
+    // Reference from root to nonRoot is still there
+    root = getRoot().get();
+    nonRoot = getNonRoot().get();
+    assertEquals(1, root.getMultiValuedContainmentEReference().size());
+    assertTrue(root.getMultiValuedContainmentEReference().contains(nonRoot));
+  }
 }

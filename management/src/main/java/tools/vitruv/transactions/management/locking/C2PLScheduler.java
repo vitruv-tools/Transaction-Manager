@@ -1,7 +1,5 @@
 package tools.vitruv.transactions.management.locking;
 
-import static com.google.common.base.Preconditions.checkState;
-
 import java.nio.file.Path;
 import java.util.Optional;
 import org.eclipse.emf.ecore.EObject;
@@ -18,12 +16,6 @@ import tools.vitruv.transactions.management.scheduling.AbstractScheduler;
  * the environment.
  */
 public class C2PLScheduler extends AbstractScheduler<EObject, C2PLThread> {
-
-  /**
-   * Path to a VitruvOCL constraints file to check after applying a transaction's operations,
-   * or empty if no consistency check should be performed.
-   */
-  private final Optional<Path> constraintsFile;
 
   /**
    * Creates a new {@link C2PLScheduler} that does not perform consistency checks.
@@ -47,8 +39,7 @@ public class C2PLScheduler extends AbstractScheduler<EObject, C2PLThread> {
   public C2PLScheduler(InternalVirtualModel multiModelEnvironment,
                        int maximumConcurrentNumberOfThreads,
                        Optional<Path> constraintsFile) {
-    super(multiModelEnvironment, maximumConcurrentNumberOfThreads);
-    this.constraintsFile = constraintsFile;
+    super(multiModelEnvironment, maximumConcurrentNumberOfThreads, constraintsFile);
   }
 
   @Override

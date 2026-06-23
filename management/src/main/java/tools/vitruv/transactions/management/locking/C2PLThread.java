@@ -9,7 +9,6 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.emf.ecore.EObject;
-import tools.vitruv.dsls.vitruvOCL.pipeline.VitruvOCL;
 import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
 import tools.vitruv.transactions.management.TransactionState;
 import tools.vitruv.transactions.management.TransactionStatus;
@@ -24,12 +23,6 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
 
   /** The lock manager to consult for acquiring/releasing locks. */
   private final LockManager<EObject> lockManager;
-
-  /**
-   * Path to the VitruvOCL constraints file to check after applying a transaction's operations, or
-   * empty if no consistency check should be performed.
-   */
-  private final Optional<Path> constraintsFile;
 
   /**
    * Creates a new {@link C2PLThread} for {@code transactionState} on {@code multiModelEnvironment}
@@ -65,9 +58,8 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
       InternalVirtualModel virtualModel,
       LockManager<EObject> lockManager,
       Optional<Path> constraintsFile) {
-    super(transactionState, observers, virtualModel);
+    super(transactionState, observers, virtualModel, constraintsFile);
     this.lockManager = lockManager;
-    this.constraintsFile = constraintsFile;
   }
 
   /**
@@ -109,7 +101,7 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
       }
     }
 
-    // Lock request succeeded, execute all operations
+    // Lock request succeeded, execute all operations and check consistency
     super.startExecutionOfEChanges();
     try {
       while (transactionState.hasExecutableOperations()) {
@@ -118,7 +110,7 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
       checkConsistency();
     } catch (IllegalArgumentException | IllegalStateException e) {
       LOGGER.warn(
-          "Failed to apply operation for transaction {} due to {}, rolling back",
+          "Failed to apply transaction {} due to {}, rolling back",
           transactionState,
           e);
       // An operation failed to execute, undo the transaction
@@ -148,28 +140,6 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
       unblockedTransactions.addAll(lockManager.commit(transactionState));
     }
     return new Result<>(transactionState.getStatus(), unblockedTransactions);
-  }
-
-  /**
-   * Checks the constraints in {@link #constraintsFile} (if any) against {@link
-   * #multiModelEnvironment} after a transaction's operations have been applied.
-   *
-   * @throws IllegalStateException if any constraint is violated, so the caller rolls back the
-   *     transaction the same way as for a failed operation
-   */
-  private void checkConsistency() {
-    if (constraintsFile.isEmpty()) {
-      return;
-    }
-    VitruvOCL.registerVSUM(multiModelEnvironment);
-    var result = VitruvOCL.evaluateConstraints(constraintsFile.get());
-    if (!result.allSatisfied()) {
-      throw new IllegalStateException(
-          "Consistency check failed for transaction "
-              + transactionState
-              + ":\n"
-              + result.getDetailedReport());
-    }
   }
 
   /**
