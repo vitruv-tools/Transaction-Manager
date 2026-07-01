@@ -8,12 +8,14 @@ import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import lombok.Getter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -65,7 +67,6 @@ public abstract class AbstractScheduler<E, T extends TransactionExecutorThread<E
    * Executor service for transaction threads.
    */
   protected final ExecutorService transactionThreadService;
-
   /**
    * A flag that indicates whether to finish with execution of still running
    * {@link TransactionExecutorThread}s, or whether to still admit new transactions.
@@ -86,6 +87,10 @@ public abstract class AbstractScheduler<E, T extends TransactionExecutorThread<E
    * Lock manager used to determine if lock requests can be granted.
    */
   protected final LockManager<E> lockManager = new LockManager<>();
+  /**
+   * An additional lock to use for checking consistency upon commit.
+   */
+  protected final ReentrantReadWriteLock consistencyCheckingLock = new ReentrantReadWriteLock(true);
 
   @Override
   public VirtualModel getMultiModelEnvironment() {

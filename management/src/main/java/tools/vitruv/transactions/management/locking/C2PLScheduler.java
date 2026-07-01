@@ -44,6 +44,7 @@ public class C2PLScheduler extends AbstractScheduler<EObject, C2PLThread> {
 
   @Override
   protected C2PLThread createNewExecutorThread(TransactionState<EObject> newTransaction) {
-    return new C2PLThread(newTransaction, observers, multiModelEnvironment, lockManager, constraintsFile);
+    return new C2PLThread(newTransaction, observers, multiModelEnvironment, lockManager,
+        constraintsFile, consistencyCheckingLock);
   }
 }

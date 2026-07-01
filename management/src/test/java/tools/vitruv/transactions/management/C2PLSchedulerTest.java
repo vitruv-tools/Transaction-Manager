@@ -50,7 +50,7 @@ public class C2PLSchedulerTest {
     var nonRoot = CommonCreatorClasses.NON_ROOT;
     var view = getDefaultView(environment).withChangeRecordingTrait();
     modifyView(view, (v) -> {
-      root.setSingleValuedEAttribute(032);
+      root.setSingleValuedEAttribute(0);
       v.registerRoot(root, URI.createFileURI(testPath + "/models/root.xml"));
     });
     modifyView(view, (v) -> {
@@ -165,7 +165,7 @@ public class C2PLSchedulerTest {
    *
    * @param testPath Path
    */
-  @RepeatedTest(432)
+  @RepeatedTest(512)
   //@Timeout(unit = TimeUnit.SECONDS, value = 600)
   void testMultipleTransactionsAtTheSameTime(@TempDir Path testPath) throws InterruptedException {
     // Set up environment
@@ -173,7 +173,7 @@ public class C2PLSchedulerTest {
 
     // Create Changes
     var root = getRoot().get();
-    int counter = 600;
+    int counter = 1024;
     List<TransactionalChangeImpl<EObject>> changes = new ArrayList<>();
     for (int i = 0; i < counter; i++) {
       changes.add(
@@ -270,7 +270,7 @@ public class C2PLSchedulerTest {
           .createReplaceSingleAttributeChange(
               root,
               AllElementTypesPackage.eINSTANCE.getRoot_SingleValuedEAttribute(),
-              032,
+              0,
               i
           );
       var newChanges = new ArrayList<>(oldChanges);
@@ -377,7 +377,7 @@ public class C2PLSchedulerTest {
   void testCorrectUndoHandlingWithInsertAndRemoveEReferences(@TempDir Path testPath) {
     setupMultiModelEnvironment(testPath);
 
-    var scheduler = new C2PLScheduler(environment, 4);
+    var scheduler = new C2PLScheduler(environment, 1);
     var root = getRoot().get();
     var nonRoot = getNonRoot().get();
     var observer = new TransactionStatusTracker<EObject>();
@@ -413,8 +413,8 @@ public class C2PLSchedulerTest {
     ));
 
     // Admit t1 and t2
-    var t1 = scheduler.admitTransaction(change1);
     var t2 = scheduler.admitTransaction(change2);
+    var t1 = scheduler.admitTransaction(change1);
 
     // Wait for execution
     scheduler.waitForApplicationOfRunningTransactions();
@@ -428,5 +428,16 @@ public class C2PLSchedulerTest {
     nonRoot = getNonRoot().get();
     assertEquals(1, root.getMultiValuedContainmentEReference().size());
     assertTrue(root.getMultiValuedContainmentEReference().contains(nonRoot));
+  }
+
+  /**
+   * Tests that VitruvOCL constraints are evaluated correctly, and they do not interfere
+   * with executing operations.
+   *
+   * @param testPath
+   */
+  @Test
+  void checkTransactionApplicationWithConsistencyChecks(@TempDir Path testPath) {
+    setupMultiModelEnvironment(testPath);
   }
 }

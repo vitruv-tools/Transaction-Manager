@@ -3,6 +3,7 @@ package tools.vitruv.transactions.management;
 import static com.google.common.base.Preconditions.checkState;
 
 import java.util.ListIterator;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import tools.vitruv.change.atomic.EChange;
 import tools.vitruv.change.composite.description.VitruviusChange;
@@ -13,6 +14,7 @@ import tools.vitruv.change.composite.description.VitruviusChange;
  *
  * @param <Element> Element type that is modified through operations.
  */
+@EqualsAndHashCode()
 public class TransactionState<Element> {
   /**
    * The underlying change that is executed.
@@ -23,31 +25,37 @@ public class TransactionState<Element> {
    * Execution status of this transaction.
    */
   @Getter
+  @EqualsAndHashCode.Exclude
   private TransactionStatus status;
 
   /**
    * Pointer to the next single operation whose executability we want to test,
    * i.e. through locking.
    */
-  private final ListIterator<EChange<Element>> operationToTestPointer;
+  @EqualsAndHashCode.Exclude
+  private transient final ListIterator<EChange<Element>> operationToTestPointer;
   /**
    * Operation that we are currently peeking for executability.
    */
-  private EChange<Element> peeking = null;
+  @EqualsAndHashCode.Exclude
+  private transient  EChange<Element> peeking = null;
   /**
    * Current index of the {@link TransactionState#operationToTestPointer}.
    */
   @Getter
+  @EqualsAndHashCode.Exclude
   private int operationTestIndex = -1;
 
   /**
    * Pointer to the next operations that we want to execute.
    */
-  private final ListIterator<EChange<Element>> operationToExecutePointer;
+  @EqualsAndHashCode.Exclude
+  private transient final ListIterator<EChange<Element>> operationToExecutePointer;
   /**
    * Current index of the {@link TransactionState#operationToExecutePointer}.
    */
   @Getter
+  @EqualsAndHashCode.Exclude
   private int operationExecuteIndex = -1;
 
   /**

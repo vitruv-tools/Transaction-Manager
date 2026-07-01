@@ -8,6 +8,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.eclipse.emf.ecore.EObject;
 import tools.vitruv.change.atomic.EChange;
 import tools.vitruv.change.atomic.command.internal.ApplyEChangeSwitch;
@@ -48,6 +50,13 @@ public abstract class VitruviusTransactionExecutorThread
    * empty if no consistency check should be performed.
    */
   protected final Optional<Path> constraintsFile;
+  /**
+   * An additional lock to use for consistency checking and applying operations.
+   *
+   * <p>Applying {@link EChange}s requires the "read"/shared lock, while also
+   * testing the consistency upon committing requires the "write"/exclusive lock.
+   */
+  protected final ReentrantReadWriteLock constraintCheckingLock;
 
   /**
    * Resolver required for applying atomic {@link EChange}s.
@@ -80,11 +89,14 @@ public abstract class VitruviusTransactionExecutorThread
   public VitruviusTransactionExecutorThread(
       TransactionState<EObject> transactionState,
       ConcurrentLinkedDeque<SchedulingEventObserver<EObject>> observers,
-      InternalVirtualModel multiModelEnvironment, Optional<Path> constraintsFile) {
+      InternalVirtualModel multiModelEnvironment,
+      Optional<Path> constraintsFile,
+      ReentrantReadWriteLock constraintCheckingLock) {
     super(transactionState, observers);
     this.multiModelEnvironment = multiModelEnvironment;
     this.baseUuidResolver = multiModelEnvironment.getUuidResolver();
     this.constraintsFile = constraintsFile;
+    this.constraintCheckingLock = constraintCheckingLock;
   }
 
   /**
@@ -128,11 +140,21 @@ public abstract class VitruviusTransactionExecutorThread
   protected EChange<Uuid> applyEChangeForward() {
     var eChange = transactionState.getNextOperationForExecution();
     checkState(isApplicable(eChange), "EChange is not applicable, rollback required");
-    hasHadEffect.put(eChange, hasEffect(eChange));
-    var unresolvedChange = assignUuidToEChange(eChange);
-    ApplyEChangeSwitch.applyEChange(eChange, true);
-    updateEObjectToUUIDMapping(eChange, unresolvedChange);
-    return unresolvedChange;
+
+    // Wait to apply change in presence of consistency checks
+    constraintCheckingLock.readLock().lock();
+    try {
+      // Apply change
+      hasHadEffect.put(eChange, hasEffect(eChange));
+      var unresolvedChange = assignUuidToEChange(eChange);
+      ApplyEChangeSwitch.applyEChange(eChange, true);
+      updateEObjectToUUIDMapping(eChange, unresolvedChange);
+      return unresolvedChange;
+    }
+    finally {
+      // Regardless of outcome, release the "read" lock
+      constraintCheckingLock.readLock().unlock();
+    }
   }
 
   protected void updateEObjectToUUIDMapping(EChange<EObject> resolvedChange, EChange<Uuid> unresolvedChange) {
@@ -158,12 +180,18 @@ public abstract class VitruviusTransactionExecutorThread
     var eChangeInverse = InverseEChangeComputer.computeInverseOf(eChangeToInvert);
     checkState(isApplicable(eChangeInverse), "EChange is not applicable, rollback impossible!");
 
-    var unresolvedInverseChange = assignUuidToEChange(eChangeInverse);
-    if (hasHadEffect.get(eChangeToInvert)) {
-      ApplyEChangeSwitch.applyEChange(eChangeToInvert, true);
-      updateEObjectToUUIDMapping(eChangeInverse, unresolvedInverseChange);
+    constraintCheckingLock.readLock().lock();
+    try {
+      var unresolvedInverseChange = assignUuidToEChange(eChangeInverse);
+      if (hasHadEffect.get(eChangeToInvert)) {
+        ApplyEChangeSwitch.applyEChange(eChangeToInvert, true);
+        updateEObjectToUUIDMapping(eChangeInverse, unresolvedInverseChange);
+      }
+      return unresolvedInverseChange;
     }
-    return unresolvedInverseChange;
+    finally {
+      constraintCheckingLock.readLock().unlock();
+    }
   }
 
   /**
@@ -248,11 +276,13 @@ public abstract class VitruviusTransactionExecutorThread
    *     transaction the same way as for a failed operation
    */
   protected void checkConsistency() {
+    VitruvOCL.registerVSUM(multiModelEnvironment);
     if (constraintsFile.isEmpty()) {
       return;
     }
-    VitruvOCL.registerVSUM(multiModelEnvironment);
+    constraintCheckingLock.writeLock().lock();
     var result = VitruvOCL.evaluateConstraints(constraintsFile.get());
+    constraintCheckingLock.writeLock().unlock();
     if (!result.allSatisfied()) {
       throw new IllegalStateException(
           "Consistency check failed for transaction "

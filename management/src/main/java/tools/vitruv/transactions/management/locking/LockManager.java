@@ -26,19 +26,6 @@ import tools.vitruv.transactions.management.TransactionStatus;
  */
 public class LockManager<E> {
   /**
-   * An "in-progress" map.
-   *
-   * <p>{@code inProgress(lock).get == true} means that a thread is currently trying to acquire or
-   * release a lock. Only one thread may be allowed to do so at a time.
-   *
-   * <p>Before each access to a lock in {@code LockManager#lockData},
-   * a thread must request access with {@code ConcurrentMap#putIfAbsent},
-   * or else, wait on the mapped value.
-   * After each access, a thread must notify waiting threads,
-   * and then release this lock with {@code ConcurrentMap#remove}.
-   */
-  private final ConcurrentMap<Lock<E>, Lock<E>> inProgress = new ConcurrentHashMap<>();
-  /**
    * Manages lock information.
    */
   private final ConcurrentMap<Lock<E>, LockData<E>> lockData = new ConcurrentHashMap<>();
@@ -54,6 +41,7 @@ public class LockManager<E> {
    */
   public synchronized TransactionState<E> submitTransaction(VitruviusChange<E> change) {
     var newTransaction = new TransactionState<>(change);
+    checkArgument(!transactionData.containsKey(newTransaction), "Attempting to submit a transaction twice!");
     transactionData.put(newTransaction, new TransactionLockingData<>());
     return newTransaction;
   }
@@ -187,9 +175,6 @@ public class LockManager<E> {
     if (lockData1.getHolders().isEmpty()) {
       lockData.remove(lock);
     }
-
-    // Mark lock as processed
-    inProgress.remove(lock);
   }
 
   /**

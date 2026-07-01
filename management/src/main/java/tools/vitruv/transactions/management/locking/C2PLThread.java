@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.emf.ecore.EObject;
@@ -37,8 +38,9 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
       TransactionState<EObject> transactionState,
       ConcurrentLinkedDeque<SchedulingEventObserver<EObject>> observers,
       InternalVirtualModel virtualModel,
-      LockManager<EObject> lockManager) {
-    this(transactionState, observers, virtualModel, lockManager, Optional.empty());
+      LockManager<EObject> lockManager,
+      ReentrantReadWriteLock consistencyCheckingLock) {
+    this(transactionState, observers, virtualModel, lockManager, Optional.empty(), consistencyCheckingLock);
   }
 
   /**
@@ -57,8 +59,9 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
       ConcurrentLinkedDeque<SchedulingEventObserver<EObject>> observers,
       InternalVirtualModel virtualModel,
       LockManager<EObject> lockManager,
-      Optional<Path> constraintsFile) {
-    super(transactionState, observers, virtualModel, constraintsFile);
+      Optional<Path> constraintsFile,
+      ReentrantReadWriteLock consistencyCheckingLock) {
+    super(transactionState, observers, virtualModel, constraintsFile, consistencyCheckingLock);
     this.lockManager = lockManager;
   }
 
