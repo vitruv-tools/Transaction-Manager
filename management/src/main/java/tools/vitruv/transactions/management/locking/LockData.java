@@ -8,19 +8,14 @@ import tools.vitruv.transactions.management.TransactionState;
 /**
  * Represents information about a {@link Lock} within a lock manager.
  *
- * @param <E> - The data type of locking {@link TransactionState}s.
+ * @param <E> The data type of locking {@link TransactionState}s.
+ * @param holders Holders, the transactions hold this lock at present.
+ * @param mode Lock mode, whether the lock is shared, or exclusive.
  */
-@Data
-class LockData<E> {
-  /**
-   * Holders, the transactions hold this lock at present.
-   */
-  private final Set<TransactionState<E>> holders = new HashSet<>();
-  /**
-   * Lock mode, whether the lock is shared, or exclusive.
-   */
-  private LockMode mode;
-
+record LockData<E>(
+    Set<TransactionState<E>> holders,
+    LockMode mode
+) {
   /**
    * Creates lockData for {@code firstHolder}.
    *
@@ -28,7 +23,7 @@ class LockData<E> {
    * @param firstHolder - {@link TransactionState}
    */
   LockData(Lock<E> newLock, TransactionState<E> firstHolder) {
+    this(new HashSet<>(), newLock.mode);
     holders.add(firstHolder);
-    mode = newLock.mode;
   }
 }

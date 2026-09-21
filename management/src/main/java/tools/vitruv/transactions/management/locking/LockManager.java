@@ -127,18 +127,18 @@ public class LockManager<E> {
       lockData.put(lockToAcquire, new LockData<>(lockToAcquire, transactionState));
       transactionStateData.registerLock(lockToAcquire);
     } else {
-      var holdingTransactions = data.getHolders();
+      var holdingTransactions = data.holders();
       // If only the current transaction holds the lock, the request also succeeds.
       // Convert the lock, if required.
 
       if (holdingTransactions.size() == 1 && holdingTransactions.contains(transactionState)) {
-        var currentLockMode = data.getMode();
-        var requestedLockMode = LockMode.highestLockMode(currentLockMode, lockToAcquire.getMode());
+        var currentLockMode = data.mode();
+        var requestedLockMode = LockMode.highestLockMode(currentLockMode, lockToAcquire.mode);
         var upgradedLock = lockToAcquire.convert(requestedLockMode);
         lockData.put(upgradedLock, new LockData<>(upgradedLock, transactionState));
         transactionStateData.registerLock(lockToAcquire);
       } else if (lockToAcquire.mode == LockMode.SHARED_INTENSIONAL_EXCLUSIVE
-          && data.getMode() == LockMode.SHARED_INTENSIONAL_EXCLUSIVE) {
+          && data.mode() == LockMode.SHARED_INTENSIONAL_EXCLUSIVE) {
         holdingTransactions.add(transactionState);
         transactionStateData.registerLock(lockToAcquire);
       }
@@ -170,9 +170,9 @@ public class LockManager<E> {
     data.unregisterLock(lock, shrinking);
     // Remove lockHolder
     var lockData1 = lockData.get(lock);
-    lockData1.getHolders().remove(lockHolder);
+    lockData1.holders().remove(lockHolder);
     // If no transactions hold the lock, remove the lock as well
-    if (lockData1.getHolders().isEmpty()) {
+    if (lockData1.holders().isEmpty()) {
       lockData.remove(lock);
     }
   }
@@ -203,14 +203,14 @@ public class LockManager<E> {
     // Cleanup
     transactionData.remove(transactionState);
     // Collect unblocked transactions
-    return transactionData
-        .entrySet()
-        .stream()
-        .filter(entry ->
-          entry.getKey().getStatus() == TransactionStatus.BLOCKED
-                  && entry.getValue().unblock(transactionState))
-        .map(Map.Entry::getKey)
-        .toList();
+    var unblockedTransactions = new ArrayList<TransactionState<E>>();
+    for (var transactionEntry: transactionData.entrySet()) {
+      if (transactionEntry.getKey().getStatus() == TransactionStatus.BLOCKED
+          && transactionEntry.getValue().unblock(transactionState)) {
+        unblockedTransactions.add(transactionEntry.getKey());
+      }
+    }
+    return unblockedTransactions;
   }
 
   private synchronized void checkForReleaseOfAllLocks(TransactionState<E> transactionState) {
