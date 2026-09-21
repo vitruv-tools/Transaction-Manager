@@ -1,5 +1,9 @@
 # Transaction-Manager
 
+[![GitHub Action CI](https://github.com/vitruv-tools/Transaction-Manager/actions/workflows/ci.yml/badge.svg)](https://github.com/vitruv-tools/Transaction-Manager/actions/workflows/ci.yml)
+[![Issues](https://img.shields.io/github/issues/vitruv-tools/Transaction-Manager.svg)](https://github.com/vitruv-tools/Transaction-Manager/issues)
+[![License](https://img.shields.io/github/license/vitruv-tools/Transaction-Manager.svg)](https://raw.githubusercontent.com/vitruv-tools/Transaction-Manager/main/LICENSE)
+
 [Vitruvius](https://vitruv.tools) is a framework for view-based (software) development.
 It assumes different models to be used for describing a system, which are automatically kept consistent by the framework executing (semi-)automated rules that preserve consistency.
 These models are modified only via views, which are projections from the underlying models.
