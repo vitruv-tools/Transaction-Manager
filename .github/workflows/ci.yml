@@ -32,33 +32,6 @@ jobs:
         check-latest: true
         cache: 'maven'
 
-    - name: Prepare Vitruv-Change submodule
-      run: >
-        cd Vitruv-Change &&
-        ./mvnw clean install
-        --fail-fast
-        --batch-mode
-        --update-snapshots
-        --no-transfer-progress &&
-        cd ../
-    - name: Prepare Vitruv DSLs submodule
-      run: >
-        cd Vitruv-DSLs &&
-        ./mvnw clean install
-        --fail-fast
-        --batch-mode
-        --update-snapshots
-        --no-transfer-progress &&
-        cd ../
-    - name: Prepare Vitruv Main submodule
-      run: >
-        cd Vitruv &&
-        ./mvnw clean install
-        --fail-fast
-        --batch-mode
-        --update-snapshots
-        --no-transfer-progress &&
-        cd ../
     - name: Verify Transaction Manager
       run: >
         ./mvnw clean verify
