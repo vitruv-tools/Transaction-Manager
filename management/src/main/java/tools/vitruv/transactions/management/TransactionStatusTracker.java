@@ -2,9 +2,7 @@ package tools.vitruv.transactions.management;
 
 import static com.google.common.base.Preconditions.checkState;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import lombok.Getter;
@@ -22,11 +20,14 @@ public class TransactionStatusTracker<E> implements SchedulingEventObserver<E> {
   private static final Logger LOGGER = LogManager.getLogger(TransactionStatusTracker.class);
 
   @Getter
-  private final ConcurrentMap<TransactionState<E>, Boolean> activeTransactions = new ConcurrentHashMap<>();
+  private final ConcurrentMap<TransactionState<E>, Boolean> activeTransactions
+      = new ConcurrentHashMap<>();
   @Getter
-  private final ConcurrentMap<TransactionState<E>, Boolean> commitedTransactions = new ConcurrentHashMap<>();
+  private final ConcurrentMap<TransactionState<E>, Boolean> commitedTransactions
+      = new ConcurrentHashMap<>();
   @Getter
-  private final ConcurrentMap<TransactionState<E>, Boolean> abortedTransactions = new ConcurrentHashMap<>();
+  private final ConcurrentMap<TransactionState<E>, Boolean> abortedTransactions
+      = new ConcurrentHashMap<>();
 
   /**
    * Clears the state of observed transactions.

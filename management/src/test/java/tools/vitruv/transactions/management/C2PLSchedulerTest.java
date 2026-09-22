@@ -36,12 +36,12 @@ import tools.vitruv.framework.vsum.VirtualModelBuilder;
 import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
 import tools.vitruv.transactions.management.locking.C2PLScheduler;
 
-public class C2PLSchedulerTest {
+class C2PLSchedulerTest {
   private InternalVirtualModel environment;
   private UuidResolver uuidResolver;
   private AtomicEChangeUuidResolver changeResolver;
 
-  private void setupMultiModelEnvironment(Path testPath) {
+  private void setupMultiModelEnvironment(Path testPath) throws  IOException{
     environment = new VirtualModelBuilder()
         .withStorageFolder(testPath)
         .withUserInteractorForResultProvider(new TestUserInteraction.ResultProvider(new TestUserInteraction()))
@@ -167,7 +167,7 @@ public class C2PLSchedulerTest {
    */
   @RepeatedTest(512)
   //@Timeout(unit = TimeUnit.SECONDS, value = 600)
-  void testMultipleTransactionsAtTheSameTime(@TempDir Path testPath) throws InterruptedException {
+  void testMultipleTransactionsAtTheSameTime(@TempDir Path testPath) throws InterruptedException, IOException {
     // Set up environment
     setupMultiModelEnvironment(testPath);
 
@@ -204,7 +204,7 @@ public class C2PLSchedulerTest {
   }
 
   @Test
-  void testFailingTransactionsNoneSucceeds(@TempDir Path testPath) {
+  void testFailingTransactionsNoneSucceeds(@TempDir Path testPath) throws IOException {
     // Set up environment
     setupMultiModelEnvironment(testPath);
 
@@ -254,7 +254,7 @@ public class C2PLSchedulerTest {
   }
 
   @Test
-  void testFailingTransactionsOnlyOneSucceeds(@TempDir Path testPath) {
+  void testFailingTransactionsOnlyOneSucceeds(@TempDir Path testPath) throws IOException {
     // Set up environment
     setupMultiModelEnvironment(testPath);
 
@@ -329,7 +329,7 @@ public class C2PLSchedulerTest {
    * @param testPath {@link Path}
    */
   @Test
-  void testCorrectUndoHandling(@TempDir Path testPath) {
+  void testCorrectUndoHandling(@TempDir Path testPath) throws IOException {
     setupMultiModelEnvironment(testPath);
     var scheduler = new C2PLScheduler(environment, 1);
     var root = getRoot().get();
@@ -374,7 +374,7 @@ public class C2PLSchedulerTest {
    * The effect of the other transaction should still be there,
    */
   @Test
-  void testCorrectUndoHandlingWithInsertAndRemoveEReferences(@TempDir Path testPath) {
+  void testCorrectUndoHandlingWithInsertAndRemoveEReferences(@TempDir Path testPath) throws IOException {
     setupMultiModelEnvironment(testPath);
 
     var scheduler = new C2PLScheduler(environment, 1);
@@ -437,7 +437,7 @@ public class C2PLSchedulerTest {
    * @param testPath
    */
   @Test
-  void checkTransactionApplicationWithConsistencyChecks(@TempDir Path testPath) {
+  void checkTransactionApplicationWithConsistencyChecks(@TempDir Path testPath) throws IOException {
     setupMultiModelEnvironment(testPath);
   }
 }

@@ -1,17 +1,7 @@
-[submodule "Vitruv-Change"]
-	path = Vitruv-Change
-	url = https://github.com/vitruv-tools/Vitruv-Change.git
-	branch = transaction
-	update = merge
 [submodule "Vitruv"]
 	path = Vitruv
 	url = https://github.com/vitruv-tools/Vitruv.git
 	branch = transaction
-	update = merge
-[submodule "Vitruv-DSLs"]
-	path = Vitruv-DSLs
-	url = https://github.com/vitruv-tools/Vitruv-DSLs.git
-	branch = vitruvocl
 	update = merge
 [submodule "emf-graph-gen"]
 	path = emf-graph-gen
