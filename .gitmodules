@@ -1,8 +1,3 @@
-[submodule "Vitruv"]
-	path = Vitruv
-	url = https://github.com/vitruv-tools/Vitruv.git
-	branch = transaction
-	update = merge
 [submodule "emf-graph-gen"]
 	path = emf-graph-gen
 	url = https://github.com/bjthehun/emf-graph-gen.git
