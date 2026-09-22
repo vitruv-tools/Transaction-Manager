@@ -1,0 +1,4 @@
+// Sample constraint
+context NonRoot
+    inv expectFoo:
+        self.value == "Foo"
