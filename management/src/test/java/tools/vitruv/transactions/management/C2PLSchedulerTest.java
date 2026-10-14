@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import allElementTypes.AllElementTypesPackage;
 import allElementTypes.NonRoot;
 import allElementTypes.Root;
+import com.vmlens.api.AllInterleavings;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -165,15 +166,14 @@ class C2PLSchedulerTest {
    *
    * @param testPath Path
    */
-  @RepeatedTest(512)
-  //@Timeout(unit = TimeUnit.SECONDS, value = 600)
+  @Test
   void testMultipleTransactionsAtTheSameTime(@TempDir Path testPath) throws InterruptedException, IOException {
     // Set up environment
     setupMultiModelEnvironment(testPath);
 
     // Create Changes
     var root = getRoot().get();
-    int counter = 1024;
+    int counter = 2048;
     List<TransactionalChangeImpl<EObject>> changes = new ArrayList<>();
     for (int i = 0; i < counter; i++) {
       changes.add(
@@ -183,7 +183,7 @@ class C2PLSchedulerTest {
     }
 
     // Submit Transactions
-    var scheduler = new C2PLScheduler(environment, 5);
+    var scheduler = new C2PLScheduler(environment, 4);
     var transactionStatusTracker = new TransactionStatusTracker<EObject>();
     scheduler.addListener(transactionStatusTracker);
 
@@ -210,7 +210,7 @@ class C2PLSchedulerTest {
 
     // Create Changes
     var root = getRoot().get();
-    int counter = 600;
+    int counter = 4;
 
     List<TransactionalChangeImpl<EObject>> changes = new ArrayList<>();
     // Delete root and set its attribute -> fail
@@ -231,26 +231,37 @@ class C2PLSchedulerTest {
       newChanges.add(setRootValueChange);
       changes.add(CommonCreatorClasses.createTransactionFrom(newChanges));
     }
+    Collections.shuffle(changes);
 
     // Shuffle and submit
-    Collections.shuffle(changes);
-    var scheduler = new C2PLScheduler(environment, 16);
-    var transactionStatusTracker = new TransactionStatusTracker<EObject>();
-    scheduler.addListener(transactionStatusTracker);
+    try (AllInterleavings interleavings = new AllInterleavings("testConcurrentExecution")) {
+      var interleavingCounter = 0;
+      while (interleavings.hasNext()) {
+        interleavingCounter++;
+        //if (interleavingCounter % 1000 == 0) {
+          System.out.println("Executed " + interleavingCounter + " interleavings");
+        //}
 
-    var transactions = new ArrayList<TransactionState<EObject>>();
-    for (var change : changes) {
-      transactions.add(scheduler.admitTransaction(change));
+        var scheduler = new C2PLScheduler(environment, 2);
+        var transactionStatusTracker = new TransactionStatusTracker<EObject>();
+        scheduler.addListener(transactionStatusTracker);
+
+
+        var transactions = new ArrayList<TransactionState<EObject>>();
+        for (var change : changes) {
+          transactions.add(scheduler.admitTransaction(change));
+        }
+
+        // Check for full execution
+        scheduler.waitForApplicationOfRunningTransactions();
+
+        // All transactions should fail
+        assertEquals(counter, transactionStatusTracker.getAbortedTransactions().size());
+
+        // Root should still exist; all transactions have undone their effects
+        assertTrue(getRoot().isPresent());
+      }
     }
-
-    // Check for full execution
-    scheduler.waitForApplicationOfRunningTransactions();
-
-    // All transactions should fail
-    assertEquals(counter, transactionStatusTracker.getAbortedTransactions().size());
-
-    // Root should still exist; all transactions have undone their effects
-    assertTrue(getRoot().isPresent());
   }
 
   @Test

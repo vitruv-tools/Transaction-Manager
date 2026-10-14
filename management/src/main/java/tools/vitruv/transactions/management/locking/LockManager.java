@@ -4,14 +4,11 @@ import static com.google.common.base.Preconditions.checkArgument;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import javax.swing.text.html.Option;
 import tools.vitruv.change.atomic.EChange;
 import tools.vitruv.change.composite.description.VitruviusChange;
 import tools.vitruv.transactions.management.TransactionState;
@@ -63,11 +60,17 @@ public class LockManager<E> {
    * If the lock request fails, returns the set of other transactions blocking {@code transaction}.
    *
    * @param transactionState - {@link TransactionState}
+   * @param backoff - boolean
+   *                If {@code backoff} is set to true, release all held locks for
+   *                {@code transactionState}.
+   *                Used to support conservative Two-Phase Locking.
+   *
    * @return {@link Optional}
    */
   public synchronized Optional<Set<TransactionState<E>>> acquireLocksForNextOperation(
-      TransactionState<E> transactionState)
-    throws InterruptedException {
+      TransactionState<E> transactionState,
+      boolean backoff)
+      throws InterruptedException {
     var data = transactionData.get(transactionState);
     checkArgument(data != null, "Transactions is not being processed!");
     checkArgument(!data.isUnlocking(),
@@ -89,11 +92,13 @@ public class LockManager<E> {
         locksAcquired.add(lock);
       } else {
         // Mark transaction as blocked
-        data.blockOn(blockingTransactions.get());
+        for (var blockingTransaction : blockingTransactions.get()) {
+          data.blockOn(blockingTransaction);
+        }
         transactionState.setToBlocked();
         // Release partial locks
-        for (var wronglyAcquiredLock : locksAcquired) {
-          releaseLock(wronglyAcquiredLock, transactionState, false);
+        if (backoff) {
+          releaseAllLocks(transactionState, false);
         }
         return blockingTransactions;
       }
@@ -174,6 +179,22 @@ public class LockManager<E> {
     // If no transactions hold the lock, remove the lock as well
     if (lockData1.holders().isEmpty()) {
       lockData.remove(lock);
+    }
+  }
+
+  /**
+   * Releases all locks held by {@code transactionState}.
+   *
+   * @param transactionState - {@link TransactionState}
+   * @param shrinking {@link Boolean}
+   *     If {@code shrinking == false}, then the associated {@code transactionState}
+   *     may acquire new locks at some later point in time.
+   *     This is required to restart a blocked or aborted transaction.
+   */
+  public synchronized void releaseAllLocks(TransactionState<E> transactionState,
+                                           boolean shrinking) throws InterruptedException {
+    for (var lock : getLocksHeldBy(transactionState)) {
+      releaseLock(lock, transactionState, shrinking);
     }
   }
 

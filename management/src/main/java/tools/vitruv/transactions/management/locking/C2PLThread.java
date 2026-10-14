@@ -94,7 +94,7 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
 
     // Attempt to preclaim all locks
     while (transactionState.wantsToAcquireLocks()) {
-      var blockingTransactions = lockManager.acquireLocksForNextOperation(transactionState);
+      var blockingTransactions = lockManager.acquireLocksForNextOperation(transactionState, true);
       if (blockingTransactions.isPresent()) {
         handleBlock(blockingTransactions.get());
         // Inform observers about block
@@ -130,7 +130,7 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
     }
 
     // Release all locks
-    releaseAllLocks(true);
+    lockManager.releaseAllLocks(this.transactionState, true);
     finishExecutionOfEChanges();
 
     var unblockedTransactions = new ArrayList<TransactionState<EObject>>();
@@ -153,21 +153,8 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
    */
   private void handleBlock(Set<TransactionState<EObject>> blockingTransactions)
       throws InterruptedException {
-    releaseAllLocks(false);
+    // lockManager.releaseAllLocks(this.transactionState, false);
     // Go back to the start of the transaction, do not execute anything
-    while (transactionState.goToPreviousOperationForExecutionCheck()) {
-      continue;
-    }
-  }
-
-  /**
-   * Releases all held locks.
-   *
-   * @param shrinking - {@link Boolean}
-   */
-  private void releaseAllLocks(boolean shrinking) throws InterruptedException {
-    for (var lock : lockManager.getLocksHeldBy(transactionState)) {
-      lockManager.releaseLock(lock, transactionState, shrinking);
-    }
+    while (transactionState.goToPreviousOperationForExecutionCheck()) {}
   }
 }

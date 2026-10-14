@@ -19,7 +19,7 @@ import tools.vitruv.transactions.management.TransactionState;
  * @param <E> - The data type of locking {@link TransactionState}s.
  */
 @Data
-class TransactionLockingData<E> {
+public class TransactionLockingData<E> {
   /**
    * Has the transaction started to release locks?
    * Transactions can only lock or unlock, so we prevent using default setters of Lombok.
@@ -40,7 +40,7 @@ class TransactionLockingData<E> {
    *
    * @param lock - {@link Lock}
    */
-  void registerLock(Lock<E> lock) {
+  synchronized void registerLock(Lock<E> lock) {
     checkState(!unlocking, "Transaction must not acquire further locks when unlocking!");
     heldLocks.add(lock);
   }
@@ -58,7 +58,7 @@ class TransactionLockingData<E> {
    * @param lock - {@link Lock}
    * @param shrinking - boolean
    */
-  void unregisterLock(Lock<E> lock, boolean shrinking) {
+  synchronized void unregisterLock(Lock<E> lock, boolean shrinking) {
     checkArgument(shrinking || !unlocking,
         "Must not release a lock in non-shrinking mode right now!");
     checkArgument(heldLocks.contains(lock), "Cannot release the lock for this transaction!");
@@ -69,10 +69,10 @@ class TransactionLockingData<E> {
   /**
    * Says that this transaction waits on {@code otherTransactions}.
    *
-   * @param otherTransactions - {@link Set}
+   * @param otherTransaction - {@link Set}
    */
-  void blockOn(Set<TransactionState<E>> otherTransactions) {
-    waitsFor.addAll(otherTransactions);
+  public synchronized boolean blockOn(TransactionState<E> otherTransaction) {
+    return waitsFor.add(otherTransaction);
   }
 
   /**
@@ -83,7 +83,7 @@ class TransactionLockingData<E> {
    *      true if and only if the managed transaction does not wait on other transactions
    *      anymore.
    */
-  boolean unblock(TransactionState<E> unlockingTransactionState) {
+  public synchronized boolean unblock(TransactionState<E> unlockingTransactionState) {
     return waitsFor.remove(unlockingTransactionState) && waitsFor.isEmpty();
   }
 }

@@ -11,24 +11,36 @@ import static tools.vitruv.transactions.management.TransactionStatus.BLOCKED;
 import static tools.vitruv.transactions.management.TransactionStatus.COMMITED;
 import static tools.vitruv.transactions.management.TransactionStatus.STARTED;
 
+
+import allElementTypes.AllElementTypesFactory;
+import allElementTypes.AllElementTypesPackage;
 import allElementTypes.Root;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
-import javax.swing.text.html.Option;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 import lombok.Getter;
 import org.eclipse.emf.common.command.Command;
+import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tools.vitruv.change.atomic.AtomicFactory;
 import tools.vitruv.change.atomic.EChange;
+import tools.vitruv.change.atomic.TypeInferringAtomicEChangeFactory;
 import tools.vitruv.change.atomic.command.internal.ApplyEChangeSwitch;
+import tools.vitruv.change.composite.description.VitruviusChange;
 import tools.vitruv.change.composite.description.impl.TransactionalChangeImpl;
 import tools.vitruv.change.testutils.metamodels.AllElementTypesCreators;
 import tools.vitruv.transactions.management.locking.ElementLock;
@@ -37,12 +49,14 @@ import tools.vitruv.transactions.management.locking.Lock;
 import tools.vitruv.transactions.management.locking.LockComputer;
 import tools.vitruv.transactions.management.locking.LockManager;
 import tools.vitruv.transactions.management.locking.LockMode;
+import tools.vitruv.transactions.management.locking.TransactionLockingData;
 
 /**
  * Tests for locking capabilities of the transaction manager.
  */
 public class LockingTest {
 
+  private static final Random random = new Random();
   private LockManager<EObject> lockManager;
 
   @BeforeEach
@@ -135,6 +149,158 @@ public class LockingTest {
   }
 
   /**
+   * Two threads do the following:
+   *
+   * <ol>
+   *   <li>Add new, blocking transactions to a {@link TransactionLockingData} object.
+   *   If these are the same, then only addition is registered</li>
+   *   <li>Remove these transactions afterward. Only once it is reported that this succeeded.</li>
+   * </ol>
+   */
+  @Test
+  void testBehaviorOfTransactionLockingData() throws InterruptedException {
+    TransactionLockingData<EObject> lockingData = new TransactionLockingData();
+    var noOfTransactions = 2 << 16;
+    Set<TransactionState<EObject>> transactionStates = new HashSet<>();
+    for (int i = 0; i < noOfTransactions; i++) {
+      Root newEObject = AllElementTypesFactory.eINSTANCE.createRoot();
+      EChange<EObject> newEChange = CommonCreatorClasses.getDeleteRootEObjectChange(newEObject);
+      VitruviusChange<EObject> newVChange = CommonCreatorClasses.createTransactionFrom(List.of(newEChange));
+      transactionStates.add(new TransactionState<>(newVChange));
+    }
+
+    // Shuffle transactionStates twice
+    // Two threads try to add states; only one succeeds.
+    var blockingStatesOne = new ArrayList<>(transactionStates);
+    Collections.shuffle(blockingStatesOne);
+    var blockingStatesTwo = new ArrayList<>(transactionStates);
+    Collections.shuffle(blockingStatesTwo);
+
+    var thread1 = new Thread(() -> {
+      for (var blockingState: blockingStatesOne) {
+        lockingData.blockOn(blockingState);
+      }
+    });
+    var thread2 = new Thread(() -> {
+      for (var blockingState: blockingStatesTwo) {
+        lockingData.blockOn(blockingState);
+      }
+    });
+
+    thread1.start();
+    thread2.start();
+    thread1.join();
+    thread2.join();
+
+    // Check correct insertion
+    assertEquals(lockingData.getWaitsFor(), transactionStates);
+
+    // Shuffle again
+    Collections.shuffle(blockingStatesOne);
+    Collections.shuffle(blockingStatesTwo);
+    // AtomicInteger counter
+    AtomicInteger counter = new AtomicInteger();
+    // Unblock in different orders
+    thread1 = new Thread(() -> {
+      for (var unblockingState: blockingStatesOne) {
+        if (lockingData.unblock(unblockingState)) {
+          counter.incrementAndGet();
+        }
+      }
+    });
+    thread2 = new Thread(() -> {
+      for (var unblockingState: blockingStatesTwo) {
+        if (lockingData.unblock(unblockingState)) {
+          counter.incrementAndGet();
+        }
+      }
+    });
+
+    thread1.start();
+    thread2.start();
+    thread1.join();
+    thread2.join();
+    // Only one unblock registered
+    assertEquals(1, counter.get());
+  }
+
+  @Test
+  void testCorrectReleaseOfTransactions() throws InterruptedException {
+    var noOfSubgraphs = 1024;
+    var noOfWaitedTxs = 4;
+
+    // Subgraphs to process
+    List<List<TransactionState<EObject>>>
+        transactionsToProcessForEachThread = new ArrayList<>();
+    // Locks to release
+
+    for (int i = 0; i < noOfWaitedTxs; i++) {
+      transactionsToProcessForEachThread.add(new ArrayList<>());
+    }
+
+    // Attributes to modify
+    AllElementTypesPackage ePackage = AllElementTypesPackage.eINSTANCE;
+    EAttribute [] attributes = {
+        ePackage.getRoot_SingleValuedEAttribute(),
+        ePackage.getNonRoot_Value(),
+        ePackage.getRoot_SingleValuedPrimitiveTypeEAttribute(),
+        ePackage.getIdentified_Id()
+    };
+    TypeInferringAtomicEChangeFactory changeFactory = TypeInferringAtomicEChangeFactory.getInstance();
+
+    // Mapping of waiting Txs to counters how often they were unlocked
+    Map<TransactionState<EObject>, AtomicInteger> unlockCounter = new ConcurrentHashMap<>();
+
+    // Create subgraphs:
+    for (int i = 0; i < noOfSubgraphs; i++) {
+      Root root = AllElementTypesFactory.eINSTANCE.createRoot();
+      root.setId(String.valueOf(i));
+
+      List<TransactionalChangeImpl<EObject>> waitedChanges =
+          Arrays.stream(attributes).map(attribute -> CommonCreatorClasses.createTransactionFrom(
+              List.of(
+                  changeFactory.createReplaceSingleAttributeChange(
+                      root, attribute, 0, 3
+                  )
+              )
+          ))
+          .toList();
+      Set<TransactionState<EObject>> waitedTxs = new HashSet<>();
+
+      // Submit waited Txs, acquire all locks
+      for (int j = 0; j < noOfWaitedTxs; j++) {
+        var waitedChange = waitedChanges.get(j);
+        var tState = lockManager.submitTransaction(waitedChange);
+        transactionsToProcessForEachThread.get(j).add(tState);
+        waitedTxs.add(tState);
+        tState.setToRunning();
+        assertTrue(lockManager.acquireLocksForNextOperation(tState, true).isEmpty());
+      }
+
+      TransactionalChangeImpl<EObject> waitingChange =
+          CommonCreatorClasses.createTransactionFrom(
+              List.of(CommonCreatorClasses.getDeleteRootEObjectChange(root))
+          );
+      // Submit waiting Tx, assume it blocks on waited Txs
+      var waitingTx = lockManager.submitTransaction(waitingChange);
+      unlockCounter.put(waitingTx, new AtomicInteger());
+      waitingTx.setToRunning();
+      assertEquals(waitedTxs, lockManager.acquireLocksForNextOperation(waitingTx, true).get());
+    }
+
+    // Run 4 threads in parallel
+    // Each thread commits a waited transaction
+    // It retrieves any unblocked transactions
+    // And from there, it increments the unblocked counter
+//    Thread unlockingThread = new Thread(() -> {
+//      for (var transactionsToUnlock: transactionsToProcessForEachThread.get(0)) {
+//        lockManager.releaseLock();
+//      }
+//    });
+
+  }
+
+  /**
    * Tests that one transaction only "succeeds", i.e.
    * it can be submitted in a STARTING state, set to running,
    * and all four of its operations can be "applied".
@@ -161,7 +327,7 @@ public class LockingTest {
     transaction.setToRunning();
 
     for (int i = 0; i < changes.size(); i++) {
-      lockManager.acquireLocksForNextOperation(transaction);
+      lockManager.acquireLocksForNextOperation(transaction, true);
     }
     // All operations have been processed
     assertFalse(transaction.wantsToAcquireLocks());
@@ -282,11 +448,11 @@ public class LockingTest {
     );
     // T1 acquires lock for op1
     transaction1.setToRunning();
-    assertTrue(lockManager.acquireLocksForNextOperation(transaction1).isEmpty());
+    assertTrue(lockManager.acquireLocksForNextOperation(transaction1, true).isEmpty());
     // T2 acquires lock for op1, but not for op2
     transaction2.setToRunning();
-    assertTrue(lockManager.acquireLocksForNextOperation(transaction2).isEmpty());
-    assertFalse(lockManager.acquireLocksForNextOperation(transaction2).isEmpty());
+    assertTrue(lockManager.acquireLocksForNextOperation(transaction2, true).isEmpty());
+    assertFalse(lockManager.acquireLocksForNextOperation(transaction2, false).isEmpty());
 
     // Get current locks of t1, expect 3 of them
     var currentLocks = lockManager.getLocksHeldBy(transaction1);
@@ -309,11 +475,11 @@ public class LockingTest {
             CommonCreatorClasses.ROOT_INTEGER_E_ATTRIBUTE);
     // Transaction 2 can proceed with op2
     transaction2.setToRunning();
-    assertTrue(lockManager.acquireLocksForNextOperation(transaction2).isEmpty());
+    assertTrue(lockManager.acquireLocksForNextOperation(transaction2, true).isEmpty());
 
     // Transaction 1 should fail to acquire further locks
     assertThrows(IllegalArgumentException.class,
-            () -> lockManager.acquireLocksForNextOperation(transaction1));
+            () -> lockManager.acquireLocksForNextOperation(transaction1, true));
   }
 
   void assertLockConflict(EChange<EObject> change1, EChange<EObject> change2) throws InterruptedException{
@@ -329,9 +495,9 @@ public class LockingTest {
     transaction1.setToRunning();
     transaction2.setToRunning();
     // Run op1 of Transaction 1
-    assertTrue(lockManager.acquireLocksForNextOperation(transaction1).isEmpty());
+    assertTrue(lockManager.acquireLocksForNextOperation(transaction1, true).isEmpty());
     // Run op2 of Transaction 2, Transaction 1 causes conflict
-    var blockingTransactions = lockManager.acquireLocksForNextOperation(transaction2);
+    var blockingTransactions = lockManager.acquireLocksForNextOperation(transaction2, true);
     assertTrue(blockingTransactions.isPresent());
     assertEquals(1, blockingTransactions.get().size());
     assertEquals(transaction1, blockingTransactions.get().toArray()[0]);
@@ -352,9 +518,9 @@ public class LockingTest {
     transaction1.setToRunning();
     transaction2.setToRunning();
     // Run op1 of Transaction 1
-    assertTrue(lockManager.acquireLocksForNextOperation(transaction1).isEmpty());
+    assertTrue(lockManager.acquireLocksForNextOperation(transaction1, true).isEmpty());
     // Run op2 of Transaction 2, expect no conflict
-    var blockingTransactions = lockManager.acquireLocksForNextOperation(transaction2);
+    var blockingTransactions = lockManager.acquireLocksForNextOperation(transaction2, true);
     assertTrue(blockingTransactions.isEmpty());
     // Assert Transaction 2 holds its requested locks
     assertEquals(
@@ -483,8 +649,8 @@ public class LockingTest {
 
     // Execute operations 1 and 2 of transactionThatIsBlocked
     transactionThatIsBlocked.setToRunning();
-    assertFalse(lockManager.acquireLocksForNextOperation(transactionThatIsBlocked).isPresent());
-    assertFalse(lockManager.acquireLocksForNextOperation(transactionThatIsBlocked).isPresent());
+    assertFalse(lockManager.acquireLocksForNextOperation(transactionThatIsBlocked, true).isPresent());
+    assertFalse(lockManager.acquireLocksForNextOperation(transactionThatIsBlocked, true).isPresent());
 
     // Now pretend that we need to release locks
     transactionThatIsBlocked.setToBlocked();
@@ -537,7 +703,7 @@ public class LockingTest {
     @Override
     public void run()  {
       try {
-        var waitInMs = new Random().nextInt(50);
+        var waitInMs = random.nextInt(50);
         System.out.println("Waiting for " + waitInMs + " milliseconds");
         sleep(waitInMs);
       } catch (InterruptedException ignored) {
@@ -554,7 +720,7 @@ public class LockingTest {
       // Request locks
       Optional<Set<TransactionState<EObject>>> blockingTransactions = Optional.empty();
       try {
-        blockingTransactions = manager.acquireLocksForNextOperation(transactionState);
+        blockingTransactions = manager.acquireLocksForNextOperation(transactionState, true);
       } catch (InterruptedException e) {
         System.out.println("oops");
       }
@@ -636,11 +802,11 @@ public class LockingTest {
 
     // Run T2
     t2.setToRunning();
-    assertTrue(lockManager.acquireLocksForNextOperation(t2).isEmpty());
+    assertTrue(lockManager.acquireLocksForNextOperation(t2, true).isEmpty());
     // Run T1, expect conflict
     t1.setToRunning();
     t3.setToRunning();
-    var lockRequestForT1 = lockManager.acquireLocksForNextOperation(t1);
+    var lockRequestForT1 = lockManager.acquireLocksForNextOperation(t1, true);
     assertTrue(lockRequestForT1.isPresent());
     var blockingForT1 =  lockRequestForT1.get();
     assertEquals(1, blockingForT1.size());
@@ -713,8 +879,8 @@ public class LockingTest {
     );
     transactionToAbort.setToRunning();
     // Acquire locks for the first two operations
-    assertTrue(lockManager.acquireLocksForNextOperation(transactionToAbort).isEmpty());
-    assertTrue(lockManager.acquireLocksForNextOperation(transactionToAbort).isEmpty());
+    assertTrue(lockManager.acquireLocksForNextOperation(transactionToAbort, true).isEmpty());
+    assertTrue(lockManager.acquireLocksForNextOperation(transactionToAbort, true).isEmpty());
     transactionToAbort.getNextOperationForExecution();
     transactionToAbort.getNextOperationForExecution();
 
@@ -726,7 +892,7 @@ public class LockingTest {
     assertThrows(IllegalStateException.class, transactionToAbort::setToRunning);
     // Acquiring locks should fail
     assertThrows(IllegalArgumentException.class,
-            () -> lockManager.acquireLocksForNextOperation(transactionToAbort));
+            () -> lockManager.acquireLocksForNextOperation(transactionToAbort, true));
     // Executing operations should fail
     assertThrows(IllegalStateException.class, transactionToAbort::getNextOperationForExecution);
     // Abort should fail at this point in time
