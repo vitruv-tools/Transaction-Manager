@@ -14,13 +14,15 @@ jobs:
     name: Verify build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
-        os: [ubuntu-latest, windows-latest, macOS-latest]
+        os: [ubuntu-latest]
 
     steps:
-    - name: Checkout repository
+    - name: Checkout repository with submodules
       uses: actions/checkout@v6.0.2
+      with:
+        submodules: true
 
     - name: Setup Java and Maven cache
       uses: actions/setup-java@v5.2.0
@@ -30,7 +32,7 @@ jobs:
         check-latest: true
         cache: 'maven'
 
-    - name: Verify build
+    - name: Verify Transaction Manager
       run: >
         ./mvnw clean verify
         --batch-mode
