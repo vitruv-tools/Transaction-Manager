@@ -12,9 +12,9 @@
     </Appenders>
 
     <Loggers>
-        <Root level="WARN">
-            <AppenderRef ref="CONSOLE"/>
-        </Root>
+<!--        <Root level="WARN">-->
+<!--            <AppenderRef ref="CONSOLE"/>-->
+<!--        </Root>-->
     </Loggers>
 
 </Configuration>

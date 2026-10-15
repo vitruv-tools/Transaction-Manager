@@ -83,12 +83,6 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
    */
   @Override
   public TransactionExecutorThread.Result<EObject> call() throws InterruptedException {
-    // In case of resubmits, check if we have been finished already
-    var currentStatus = transactionState.getStatus();
-    if (currentStatus != TransactionStatus.STARTED && currentStatus != TransactionStatus.BLOCKED) {
-      return new Result<>(TransactionStatus.COMMITED, List.of());
-    }
-
     observers.forEach(observer -> observer.observeRunning(transactionState));
     transactionState.setToRunning();
 
@@ -138,9 +132,11 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
     if (transactionState.getStatus() == TransactionStatus.ABORTING) {
       observers.forEach(observers -> observers.observeAbort(transactionState));
       unblockedTransactions.addAll(lockManager.abort(transactionState));
+      transactionState.setToAborted();
     } else {
       observers.forEach(observers -> observers.observeCommit(transactionState));
       unblockedTransactions.addAll(lockManager.commit(transactionState));
+      transactionState.setToCommited();
     }
     return new Result<>(transactionState.getStatus(), unblockedTransactions);
   }
@@ -153,7 +149,7 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
    */
   private void handleBlock(Set<TransactionState<EObject>> blockingTransactions)
       throws InterruptedException {
-    // lockManager.releaseAllLocks(this.transactionState, false);
+    transactionState.setToBlocked();
     // Go back to the start of the transaction, do not execute anything
     while (transactionState.goToPreviousOperationForExecutionCheck()) {}
   }

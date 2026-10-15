@@ -95,7 +95,6 @@ public class LockManager<E> {
         for (var blockingTransaction : blockingTransactions.get()) {
           data.blockOn(blockingTransaction);
         }
-        transactionState.setToBlocked();
         // Release partial locks
         if (backoff) {
           releaseAllLocks(transactionState, false);
@@ -214,8 +213,6 @@ public class LockManager<E> {
     checkArgument(!transactionState.wantsToAcquireLocks(),
         "Only transactions that have no more operations can be committed!");
     checkForReleaseOfAllLocks(transactionState);
-    // Mark commit
-    transactionState.setToCommited();
     return unblockTransactionsBlockedBy(transactionState);
   }
 
@@ -226,8 +223,7 @@ public class LockManager<E> {
     // Collect unblocked transactions
     var unblockedTransactions = new ArrayList<TransactionState<E>>();
     for (var transactionEntry: transactionData.entrySet()) {
-      if (transactionEntry.getKey().getStatus() == TransactionStatus.BLOCKED
-          && transactionEntry.getValue().unblock(transactionState)) {
+      if (transactionEntry.getValue().unblock(transactionState)) {
         unblockedTransactions.add(transactionEntry.getKey());
       }
     }
@@ -256,8 +252,6 @@ public class LockManager<E> {
     checkArgument(!transactionState.hasOperationsToInvert(),
         "Transaction still has operations to invert!");
     checkForReleaseOfAllLocks(transactionState);
-    // Mark abort
-    transactionState.setToAborted();
     return unblockTransactionsBlockedBy(transactionState);
   }
 

@@ -348,6 +348,7 @@ public class LockingTest {
     }
     // Commit
     lockManager.commit(transaction);
+    transaction.setToCommited();
     assertEquals(COMMITED, transaction.getStatus());
   }
 
@@ -474,7 +475,6 @@ public class LockingTest {
             LockMode.EXCLUSIVE,
             CommonCreatorClasses.ROOT_INTEGER_E_ATTRIBUTE);
     // Transaction 2 can proceed with op2
-    transaction2.setToRunning();
     assertTrue(lockManager.acquireLocksForNextOperation(transaction2, true).isEmpty());
 
     // Transaction 1 should fail to acquire further locks
@@ -704,7 +704,6 @@ public class LockingTest {
     public void run()  {
       try {
         var waitInMs = random.nextInt(50);
-        System.out.println("Waiting for " + waitInMs + " milliseconds");
         sleep(waitInMs);
       } catch (InterruptedException ignored) {
         return;
@@ -723,11 +722,6 @@ public class LockingTest {
         blockingTransactions = manager.acquireLocksForNextOperation(transactionState, true);
       } catch (InterruptedException e) {
         System.out.println("oops");
-      }
-      if (blockingTransactions.isPresent()) {
-        var status = transactionState.getStatus();
-        assertSame(BLOCKED, status, () -> "Transaction should be blocked, but is %s" + status);
-        return;
       }
       // Add locks
       locks.addAll(manager.getLocksHeldBy(transactionState));
@@ -811,6 +805,7 @@ public class LockingTest {
     var blockingForT1 =  lockRequestForT1.get();
     assertEquals(1, blockingForT1.size());
     assertTrue(blockingForT1.contains(t2));
+    t1.setToBlocked();
 
     // Commit T2
     for (var lock : lockManager.getLocksHeldBy(t2)) {

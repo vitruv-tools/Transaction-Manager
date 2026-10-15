@@ -224,7 +224,7 @@ public abstract class AbstractScheduler<E, T extends TransactionExecutorThread<E
       }
       return true;
     }, this.transactionThreadService)
-        .exceptionallyAsync(throwable -> {
+        .exceptionally(throwable -> {
           LOGGER.error("Transaction failed - gates to hell open: ", throwable);
           return false;
         });

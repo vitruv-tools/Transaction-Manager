@@ -33,12 +33,12 @@ public class TransactionState<Element> {
    * i.e. through locking.
    */
   @EqualsAndHashCode.Exclude
-  private transient final ListIterator<EChange<Element>> operationToTestPointer;
+  private final transient ListIterator<EChange<Element>> operationToTestPointer;
   /**
    * Operation that we are currently peeking for executability.
    */
   @EqualsAndHashCode.Exclude
-  private transient  EChange<Element> peeking = null;
+  private transient EChange<Element> peeking = null;
   /**
    * Current index of the {@link TransactionState#operationToTestPointer}.
    */
@@ -75,7 +75,7 @@ public class TransactionState<Element> {
   /**
    * Sets a {@code STARTED} transaction to {@code RUNNING}.
    */
-  public void setToRunning() {
+  public synchronized void setToRunning() {
     checkState(status == TransactionStatus.STARTED || status == TransactionStatus.BLOCKED,
         "Can only set a started or blocked transaction to running, but this transaction is %s!",
         status);
@@ -85,7 +85,7 @@ public class TransactionState<Element> {
   /**
    * Sets a {@code RUNNING} transaction to {@code BLOCKED}.
    */
-  public void setToBlocked() {
+  public synchronized void setToBlocked() {
     checkState(status == TransactionStatus.RUNNING,
         "Can only set a running transaction to blocked!");
     status = TransactionStatus.BLOCKED;
@@ -94,7 +94,7 @@ public class TransactionState<Element> {
   /**
    * Sets a {@code RUNNING} or {@code BLOCKING} transaction to {@code ABORTING}.
    */
-  public void setToAborting() {
+  public synchronized void setToAborting() {
     checkState(status == TransactionStatus.RUNNING || status == TransactionStatus.BLOCKED,
         "Can only abort a running or blocked transaction!");
     status = TransactionStatus.ABORTING;
@@ -103,7 +103,7 @@ public class TransactionState<Element> {
   /**
    * Sets an {@code ABORTING} transaction to {@code ABORTED}.
    */
-  public void setToAborted() {
+  public synchronized void setToAborted() {
     checkState(status == TransactionStatus.ABORTING, "Can only abort from ABORTING!");
     checkState(!hasOperationsToInvert(), "Some operations still need to be inverted!");
     status = TransactionStatus.ABORTED;
@@ -113,7 +113,7 @@ public class TransactionState<Element> {
    * Sets a {@code RUNNING} transaction to {@code COMMITED}.
    * This only is possible after all operations have been executed.
    */
-  public void setToCommited() {
+  public synchronized void setToCommited() {
     checkState(status == TransactionStatus.RUNNING, "Can only commit a running transaction!");
     checkState(!wantsToAcquireLocks(),
         "Can only commit a transaction if all operations have been executed!");
@@ -126,7 +126,7 @@ public class TransactionState<Element> {
    *
    * @return boolean
    */
-  public boolean wantsToAcquireLocks() {
+  public synchronized boolean wantsToAcquireLocks() {
     return peeking != null || operationToTestPointer.hasNext();
   }
 
@@ -137,7 +137,7 @@ public class TransactionState<Element> {
    *
    * @return {@link EChange}
    */
-  public EChange<Element> peekNextOperationForExecutionChecking() {
+  public synchronized EChange<Element> peekNextOperationForExecutionChecking() {
     checkState(wantsToAcquireLocks(), "This transaction has no operation to acquire locks for!");
     checkState(status == TransactionStatus.RUNNING || status == TransactionStatus.BLOCKED,
         "Cannot peek further operations");
@@ -151,7 +151,7 @@ public class TransactionState<Element> {
   /**
    * Accepts the next operation when in peeking mode, because the tests for it have succeeded.
    */
-  public void markNextOperationAsExecutable() {
+  public synchronized void markNextOperationAsExecutable() {
     checkState(status == TransactionStatus.RUNNING, "Can only advance a running transaction!");
     checkState(peeking != null, "We are not peeking for some operation!");
     peeking = null;
@@ -164,7 +164,7 @@ public class TransactionState<Element> {
    *
    * @return boolean
    */
-  public boolean hasExecutableOperations() {
+  public synchronized boolean hasExecutableOperations() {
     return status == TransactionStatus.RUNNING && operationExecuteIndex < operationTestIndex;
   }
 
@@ -173,7 +173,7 @@ public class TransactionState<Element> {
    *
    * @return boolean
    */
-  public boolean hasOperationsToInvert() {
+  public synchronized boolean hasOperationsToInvert() {
     return status == TransactionStatus.ABORTING && operationExecuteIndex >= 0;
   }
 
@@ -187,7 +187,7 @@ public class TransactionState<Element> {
    *
    * @return {@link EChange}
    */
-  public EChange<Element> getNextOperationForExecution() {
+  public synchronized EChange<Element> getNextOperationForExecution() {
     checkState(status == TransactionStatus.RUNNING,
         "Can only execute operations of a running transaction!");
     checkState(hasExecutableOperations(),
@@ -202,7 +202,7 @@ public class TransactionState<Element> {
    *
    * @return {@link EChange}.
    */
-  public EChange<Element> getNextInverseOperation() {
+  public synchronized EChange<Element> getNextInverseOperation() {
     checkState(status == TransactionStatus.ABORTING,
         "Can only invert operations when aborting a transaction!");
     checkState(hasOperationsToInvert(),
@@ -219,7 +219,7 @@ public class TransactionState<Element> {
    * @return boolean - true if there is another operation that has been accepted,
    *      false if there is none other.
    */
-  public boolean goToPreviousOperationForExecutionCheck() {
+  public synchronized boolean goToPreviousOperationForExecutionCheck() {
     checkState(status == TransactionStatus.BLOCKED,
         "Can not go back to previous operation for non-blocking transactions, transaction is " + status);
     var hasPrevious = operationToTestPointer.hasPrevious();
