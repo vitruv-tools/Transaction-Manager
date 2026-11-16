@@ -88,8 +88,8 @@
             <artifactId>multimodelocl-language</artifactId>
         </dependency>
         <dependency>
-            <groupId>tools.vitruv.dsls</groupId>
-            <artifactId>vitruvOCL-language</artifactId>
+            <groupId>tools.vitruv</groupId>
+            <artifactId>tools.vitruv.vitruvocl.language</artifactId>
         </dependency>
 
     </dependencies>

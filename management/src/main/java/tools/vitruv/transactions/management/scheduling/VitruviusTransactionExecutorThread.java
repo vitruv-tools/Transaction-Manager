@@ -22,7 +22,7 @@ import tools.vitruv.change.atomic.resolve.AtomicEChangeResolverHelper;
 import tools.vitruv.change.atomic.uuid.AtomicEChangeUuidResolver;
 import tools.vitruv.change.atomic.uuid.Uuid;
 import tools.vitruv.change.atomic.uuid.UuidResolver;
-import tools.vitruv.dsls.vitruvOCL.pipeline.VitruvOCL;
+import tools.vitruv.dsls.vitruvocl.pipeline.VitruvOCL;
 import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
 import tools.vitruv.transactions.management.InverseEChangeComputer;
 import tools.vitruv.transactions.management.TransactionState;
