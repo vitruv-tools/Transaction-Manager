@@ -9,17 +9,18 @@ package tools.vitruv.transactions.management.locking;
  * single writer. Compatibility (see {@link #isCompatibleWith(LockMode)}):
  *
  * <pre>
- *                      IS   SIX(=IX)  S    X
- *   INTENTION_SHARED   yes  yes       yes  no
- *   SHARED_INT._EXCL.  yes  yes       no   no
- *   SHARED             yes  no        yes  no
- *   EXCLUSIVE          no   no        no   no
+ *                                IS   IX   S    SIX  X
+ *   INTENTION_SHARED (IS)        yes  yes  yes  yes  no
+ *   SHARED_INTENSIONAL_EXCL.(IX) yes  yes  no   no   no
+ *   SHARED (S)                   yes  no   yes  no   no
+ *   SHARED_WITH_INTENTION_EXCL.  yes  no   no   no   no
+ *   EXCLUSIVE (X)                no   no   no   no   no
  * </pre>
  *
  * <p>{@link #SHARED_INTENSIONAL_EXCLUSIVE} keeps its original semantics: it may be held by several
  * transactions at once and announces exclusive locks below, i.e. it behaves like the classic
- * intention-exclusive (IX) mode. There is no combined S+IX mode; combining both yields
- * {@link #EXCLUSIVE} (stronger, hence still correct).
+ * intention-exclusive (IX) mode. The classic SIX mode (shared, plus exclusive locks below) is
+ * {@link #SHARED_WITH_INTENTION_EXCLUSIVE}.
  */
 public enum LockMode {
   /**
@@ -36,6 +37,11 @@ public enum LockMode {
    * Shared: may be held by several readers at once.
    */
   SHARED(),
+  /**
+   * Shared, and exclusive locks on finer-grained nodes below (classic SIX): e.g. reading all
+   * instances of a class while writing a feature of some of them.
+   */
+  SHARED_WITH_INTENTION_EXCLUSIVE(),
   /**
    * Exclusive:
    * This lock can only be held by one transaction.
@@ -55,6 +61,9 @@ public enum LockMode {
     }
     if (this == INTENTION_SHARED || other == INTENTION_SHARED) {
       return true;
+    }
+    if (this == SHARED_WITH_INTENTION_EXCLUSIVE || other == SHARED_WITH_INTENTION_EXCLUSIVE) {
+      return false;
     }
     // remaining: SHARED_INTENSIONAL_EXCLUSIVE and SHARED
     return this == other;
@@ -84,7 +93,10 @@ public enum LockMode {
     if (l1 == INTENTION_SHARED) {
       return l2;
     }
-    // differing modes out of SHARED_INTENSIONAL_EXCLUSIVE, SHARED, EXCLUSIVE
-    return EXCLUSIVE;
+    if (l1 == EXCLUSIVE || l2 == EXCLUSIVE) {
+      return EXCLUSIVE;
+    }
+    // two different ones of SHARED_INTENSIONAL_EXCLUSIVE, SHARED, SHARED_WITH_INTENTION_EXCLUSIVE
+    return SHARED_WITH_INTENTION_EXCLUSIVE;
   }
 }

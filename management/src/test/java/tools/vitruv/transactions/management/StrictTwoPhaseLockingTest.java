@@ -110,17 +110,22 @@ class StrictTwoPhaseLockingTest {
   @Test
   void testCompatibilityMatrix() {
     LockMode ix = SHARED_INTENSIONAL_EXCLUSIVE;
+    LockMode six = LockMode.SHARED_WITH_INTENTION_EXCLUSIVE;
     Map<LockMode, Set<LockMode>> compatible = Map.of(
-        INTENTION_SHARED, Set.of(INTENTION_SHARED, ix, SHARED),
+        INTENTION_SHARED, Set.of(INTENTION_SHARED, ix, SHARED, six),
         ix, Set.of(INTENTION_SHARED, ix),
         SHARED, Set.of(INTENTION_SHARED, SHARED),
+        six, Set.of(INTENTION_SHARED),
         EXCLUSIVE, Set.of());
     for (LockMode a : LockMode.values()) {
       for (LockMode b : LockMode.values()) {
         assertEquals(compatible.get(a).contains(b), a.isCompatibleWith(b), a + " vs " + b);
       }
     }
-    assertEquals(EXCLUSIVE, LockMode.highestLockMode(ix, SHARED));
+    assertEquals(six, LockMode.highestLockMode(ix, SHARED));
+    assertEquals(six, LockMode.highestLockMode(SHARED, six));
+    assertEquals(EXCLUSIVE, LockMode.highestLockMode(six, EXCLUSIVE));
+    assertEquals(ix, six.intention());
     assertEquals(SHARED, LockMode.highestLockMode(INTENTION_SHARED, SHARED));
     assertEquals(ix, LockMode.highestLockMode(ix, INTENTION_SHARED));
     assertEquals(INTENTION_SHARED, SHARED.intention());
@@ -282,10 +287,10 @@ class StrictTwoPhaseLockingTest {
     assertEquals(SHARED_INTENSIONAL_EXCLUSIVE, keys.get(ROOT_CLASS_KEY));
     assertEquals(SHARED_INTENSIONAL_EXCLUSIVE,
         keys.get(HierarchicalLockComputer.metamodelKey(AllElementTypesPackage.eINSTANCE.getRoot())));
-    // the provider's read of all roots and the instance write merge into an exclusive lock
+    // the provider's read of all roots and the instance write merge into SIX
     var merged = keyLocks(new HierarchicalLockComputer(provider(new KeyRequest(ROOT_CLASS_KEY,
         SHARED))).computeLocksFor(change));
-    assertEquals(EXCLUSIVE, merged.get(ROOT_CLASS_KEY));
+    assertEquals(LockMode.SHARED_WITH_INTENTION_EXCLUSIVE, merged.get(ROOT_CLASS_KEY));
   }
 
   @Test

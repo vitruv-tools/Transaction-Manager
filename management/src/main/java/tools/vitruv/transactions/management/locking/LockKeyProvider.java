@@ -14,13 +14,18 @@ import tools.vitruv.change.atomic.EChange;
  * {@link HierarchicalLockComputer}:
  * <ul>
  *   <li>{@code mm:<nsUri>} a metamodel,</li>
- *   <li>{@code c:<nsUri>#<EClass>} the instances of a concrete class (child of its metamodel),</li>
- *   <li>{@code f:<nsUri>#<declaring EClass>.<feature>} a feature on all instances (child of its
- *   metamodel and of the classes of all instances that have the feature),</li>
- *   <li>{@code corr}, {@code corr:<tag>}, {@code corr:<tag>|<classKey>|<classKey>}
- *   correspondences,</li>
+ *   <li>{@code c:<nsUri>#<EClass>} the instances of a class (rows),</li>
+ *   <li>{@code f:<nsUri>#<declaring EClass>.<feature>} a feature on all instances (columns); a
+ *   type-level feature access also takes intention modes on {@code c:} of every class that has
+ *   the feature, so that row and column locks meet,</li>
+ *   <li>correspondence nodes ({@code corr}, {@code corr#<tag>}, {@code corr@<class>},
+ *   {@code corr|<class>|<class>}, {@code corr|<class>|<class>|<tag>}),</li>
  *   <li>{@code res} the resource set (persisting models).</li>
  * </ul>
+ * An instance lock on an element or a feature of it takes intention modes on {@code c:} of the
+ * element's class, on {@code f:} of the feature and on the metamodels.
+ * The reactions implementation is {@code LockRequests} in Vitruv-DSLs (branch
+ * {@code feat/reactions-static-analysis}); its levels map one to one onto {@link LockMode}.
  *
  * @param <E> - The Element type.
  */
