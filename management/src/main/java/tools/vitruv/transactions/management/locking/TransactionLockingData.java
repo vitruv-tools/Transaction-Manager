@@ -3,11 +3,9 @@ package tools.vitruv.transactions.management.locking;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.locks.AbstractQueuedLongSynchronizer;
-import java.util.concurrent.locks.AbstractQueuedSynchronizer;
-import java.util.concurrent.locks.Condition;
 import lombok.AccessLevel;
 import lombok.Data;
 import lombok.Setter;
@@ -37,11 +35,14 @@ public class TransactionLockingData<E> {
 
   /**
    * Adds {@code lock} to the {@link TransactionLockingData#heldLocks}.
+   * If the transaction already holds the lock in another mode, the entry is replaced, so that
+   * {@link #getHeldLocks()} shows the current mode.
    *
    * @param lock - {@link Lock}
    */
   synchronized void registerLock(Lock<E> lock) {
     checkState(!unlocking, "Transaction must not acquire further locks when unlocking!");
+    heldLocks.remove(lock);
     heldLocks.add(lock);
   }
 
@@ -73,6 +74,26 @@ public class TransactionLockingData<E> {
    */
   public synchronized boolean blockOn(TransactionState<E> otherTransaction) {
     return waitsFor.add(otherTransaction);
+  }
+
+  /**
+   * Replaces the transactions this transaction waits for (strict 2PL: a transaction waits for
+   * exactly one lock request at a time, so earlier wait-for edges are obsolete).
+   *
+   * @param otherTransactions - {@link Collection}
+   */
+  synchronized void waitOnlyFor(Collection<TransactionState<E>> otherTransactions) {
+    waitsFor.clear();
+    waitsFor.addAll(otherTransactions);
+  }
+
+  /**
+   * A copy of the transactions this transaction currently waits for.
+   *
+   * @return {@link Set}
+   */
+  synchronized Set<TransactionState<E>> waitsForSnapshot() {
+    return Set.copyOf(waitsFor);
   }
 
   /**
