@@ -42,8 +42,21 @@ public final class HierarchicalLockComputer {
    * @return {@link List}
    */
   public List<Lock<EObject>> computeLocksFor(EChange<EObject> change) {
+    return withTypeIntentions(LockComputer.computeLocksFor(change), keyProvider.keyLocksFor(change));
+  }
+
+  /**
+   * The given instance locks, the intention locks they imply on the type-level keys, and the given
+   * key locks, merged per lock into the least mode covering all requests.
+   *
+   * @param instanceLocks - locks on elements and their features
+   * @param keyRequests - type-level key locks
+   * @return {@link List}
+   */
+  public static List<Lock<EObject>> withTypeIntentions(List<? extends Lock<EObject>> instanceLocks,
+      List<LockKeyProvider.KeyRequest> keyRequests) {
     Map<Lock<EObject>, LockMode> merged = new LinkedHashMap<>();
-    for (Lock<EObject> instanceLock : LockComputer.computeLocksFor(change)) {
+    for (Lock<EObject> instanceLock : instanceLocks) {
       add(merged, instanceLock);
       LockMode intention = instanceLock.getMode().intention();
       EObject element = instanceLock.getRoot();
@@ -57,7 +70,7 @@ public final class HierarchicalLockComputer {
         addKey(merged, metamodelKey(feature.getEContainingClass()), intention);
       }
     }
-    for (LockKeyProvider.KeyRequest request : keyProvider.keyLocksFor(change)) {
+    for (LockKeyProvider.KeyRequest request : keyRequests) {
       addKey(merged, request.key(), request.mode());
     }
     List<Lock<EObject>> result = new ArrayList<>(merged.size());

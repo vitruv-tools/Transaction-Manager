@@ -228,6 +228,22 @@ public class LockManager<E> {
   }
 
   /**
+   * Waits until none of {@code transactions} is active any more (committed or aborted). A
+   * deadlock victim calls this before it restarts, so that it does not grab its locks again before
+   * the transactions it deadlocked with could finish (which would recreate the same deadlock).
+   * The caller must not hold locks.
+   *
+   * @param transactions - {@link Collection}
+   * @throws InterruptedException if the waiting thread is interrupted
+   */
+  public synchronized void awaitEnd(Collection<? extends TransactionState<?>> transactions)
+      throws InterruptedException {
+    while (transactions.stream().anyMatch(transactionData::containsKey)) {
+      wait();
+    }
+  }
+
+  /**
    * The transactions that {@code transactionState} currently waits for (its wait-for edges).
    *
    * @param transactionState - {@link TransactionState}
