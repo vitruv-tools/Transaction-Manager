@@ -23,7 +23,8 @@ class VmlensReproducerTest {
     synchronized (lockManager) {
       if (lockHolder != -1) {
         return false;
-      }      lockHolder = id;
+      }
+      lockHolder = id;
     }
     synchronized (lockManager) {
       lockHolder = -1;
@@ -43,6 +44,7 @@ class VmlensReproducerTest {
   }
 
   @Test
+  @Disabled("Created to demonstrate Vmlens issues; not required")
   void schedulerPattern() throws InterruptedException {
     try (AllInterleavings interleavings = new AllInterleavings("reproducerSchedulerPattern")) {
       var iteration = 0;
@@ -50,7 +52,7 @@ class VmlensReproducerTest {
         System.out.println("Reproducer interleaving " + ++iteration);
         ExecutorService pool = Executors.newFixedThreadPool(2);
         BlockingDeque<int[]> results = new LinkedBlockingDeque<>();
-        int open = 4;
+        int open = 80;
         for (int i = 0; i < open; i++) {
           submit(pool, results, i);
         }

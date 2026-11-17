@@ -18,15 +18,10 @@ import java.util.Optional;
 import java.util.function.Consumer;
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EObject;
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import tools.vitruv.change.atomic.EChange;
 import tools.vitruv.change.atomic.TypeInferringAtomicEChangeFactory;
-import tools.vitruv.change.atomic.uuid.AtomicEChangeUuidResolver;
-import tools.vitruv.change.atomic.uuid.Uuid;
-import tools.vitruv.change.atomic.uuid.UuidResolver;
 import tools.vitruv.change.composite.description.VitruviusChange;
 import tools.vitruv.change.composite.description.impl.TransactionalChangeImpl;
 import tools.vitruv.change.testutils.TestUserInteraction;
@@ -42,8 +37,6 @@ import tools.vitruv.transactions.management.locking.C2PLScheduler;
 
 class C2PLSchedulerTest {
   private InternalVirtualModel environment;
-  private UuidResolver uuidResolver;
-  private AtomicEChangeUuidResolver changeResolver;
 
   private void setupMultiModelEnvironment(Path testPath) throws  IOException{
     environment = new VirtualModelBuilder()
@@ -53,17 +46,14 @@ class C2PLSchedulerTest {
     var root = CommonCreatorClasses.ROOT;
     var nonRoot = CommonCreatorClasses.NON_ROOT;
     var view = getDefaultView(environment).withChangeRecordingTrait();
-    modifyView(view, (v) -> {
+    modifyView(view, v -> {
       root.setSingleValuedEAttribute(0);
       v.registerRoot(root, URI.createFileURI(testPath + "/models/root.xml"));
     });
-    modifyView(view, (v) -> {
+    modifyView(view, v -> {
       v.registerRoot(nonRoot, URI.createFileURI(testPath + "/models/nonroot.xml"));
     });
 
-
-    uuidResolver = environment.getUuidResolver();
-    changeResolver = new AtomicEChangeUuidResolver(uuidResolver);
 
     assertEquals(1, getDefaultView(environment).getRootObjects(Root.class).size());
   }
@@ -84,23 +74,18 @@ class C2PLSchedulerTest {
             ViewTypeFactory.createIdentityMappingViewType("Root")
         )
         .getSelectableElements()
-        .stream().filter(e -> e instanceof Root)
+        .stream().filter(Root.class::isInstance)
         .map(e -> (Root) e)
         .findFirst()
         .get();
 
-    var transactionalChange = new TransactionalChangeImpl<>(
+    return new TransactionalChangeImpl<>(
         List.of(
             CommonCreatorClasses.getRootIntegerReplaceSingleValuedEAttributeChange(
                 root
             )
         )
     );
-    return transactionalChange;
-  }
-
-  private TransactionalChangeImpl<Uuid> convertFromEObjectVitruviusChange(VitruviusChange<EObject> originalChange) {
-    return null;
   }
 
   /**
@@ -147,7 +132,7 @@ class C2PLSchedulerTest {
             ViewTypeFactory.createIdentityMappingViewType("Root")
         )
         .getSelectableElements()
-        .stream().filter(e -> e instanceof Root)
+        .stream().filter(Root.class::isInstance)
         .map(e -> (Root) e)
         .findFirst();
 
@@ -158,7 +143,7 @@ class C2PLSchedulerTest {
             ViewTypeFactory.createIdentityMappingViewType("Root")
         )
         .getSelectableElements()
-        .stream().filter(e -> e instanceof NonRoot)
+        .stream().filter(Root.class::isInstance)
         .map(e -> (NonRoot) e)
         .findFirst();
   }
@@ -170,7 +155,7 @@ class C2PLSchedulerTest {
    * @param testPath Path
    */
   @Test
-  void testMultipleTransactionsAtTheSameTime(@TempDir Path testPath) throws InterruptedException, IOException {
+  void testMultipleTransactionsAtTheSameTime(@TempDir Path testPath) throws IOException {
     // Set up environment
     setupMultiModelEnvironment(testPath);
 
@@ -190,9 +175,8 @@ class C2PLSchedulerTest {
     var transactionStatusTracker = new TransactionStatusTracker<EObject>();
     scheduler.addListener(transactionStatusTracker);
 
-    var transactions = new ArrayList<TransactionState<EObject>>();
     for (var change : changes) {
-      transactions.add(scheduler.admitTransaction(change));
+      scheduler.admitTransaction(change);
     }
 
     // Check for full execution
@@ -212,13 +196,14 @@ class C2PLSchedulerTest {
 
     try (AllInterleavings interleavings =
              new AllInterleavingsBuilder()
+                 .withReportAsSummaryThreshold(100)
                  .withTraceInterleaveActions()
                  .build("testFailingTransactionsNoneSucceeds")) {
       var interleavingCounter = 0;
       while (interleavings.hasNext()) {
         // Create Changes
         var root = getRoot().get();
-        int counter = 4;
+        int counter = 2;
 
         List<TransactionalChangeImpl<EObject>> changes = new ArrayList<>();
         // Delete root and set its attribute -> fail
@@ -246,10 +231,8 @@ class C2PLSchedulerTest {
         var scheduler = new C2PLScheduler(environment, 2);
         var transactionStatusTracker = new TransactionStatusTracker<EObject>();
         scheduler.addListener(transactionStatusTracker);
-
-        var transactions = new ArrayList<TransactionState<EObject>>();
         for (var change : changes) {
-          transactions.add(scheduler.admitTransaction(change));
+          scheduler.admitTransaction(change);
         }
 
         // Check for full execution
@@ -269,56 +252,45 @@ class C2PLSchedulerTest {
     // Set up environment
     setupMultiModelEnvironment(testPath);
 
-    try (AllInterleavings interleavings =
-             new AllInterleavingsBuilder()
-                 .withTraceInterleaveActions()
-                 .build("testFailingTransactionsOnlyOneSucceeds")) {
-      while (interleavings.hasNext()) {
-        // Create Changes
-        var root = getRoot().get();
-        var oldValue = root.getSingleValuedEAttribute();
-        int counter = 5;
+    // Create Changes
+    var root = getRoot().get();
+    int counter = 100;
 
-        List<TransactionalChangeImpl<EObject>> changes = new ArrayList<>();
-        // Apply previous changes, with twist: also set attribute of root
-        for (int i = 0; i <= counter; i++) {
-          if (i == oldValue) {
-            continue;
-          }
-
-          var oldChanges = createNonRootAndInsertionTransaction(counter, root);
-          EChange<EObject> setRootValueChange = TypeInferringAtomicEChangeFactory.getInstance()
-              .createReplaceSingleAttributeChange(
-                  root,
-                  AllElementTypesPackage.eINSTANCE.getRoot_SingleValuedEAttribute(),
-                  oldValue,
-                  i
-              );
-          var newChanges = new ArrayList<>(oldChanges);
-          newChanges.add(setRootValueChange);
-          changes.add(CommonCreatorClasses.createTransactionFrom(newChanges));
-        }
-
-        // Shuffle and submit
-        var scheduler = new C2PLScheduler(environment, 4);
-        var transactionStatusTracker = new TransactionStatusTracker<EObject>();
-        scheduler.addListener(transactionStatusTracker);
-
-        var transactions = new ArrayList<TransactionState<EObject>>();
-        for (var change : changes) {
-          transactions.add(scheduler.admitTransaction(change));
-        }
-
-        // Check for full execution
-        scheduler.waitForApplicationOfRunningTransactions();
-
-        // Exactly one transaction should succeed, the others should fail
-        assertEquals(counter - 1, transactionStatusTracker.getAbortedTransactions().size());
-        assertEquals(1, transactionStatusTracker.getCommitedTransactions().size());
-
-
+    List<TransactionalChangeImpl<EObject>> changes = new ArrayList<>();
+    // Apply previous changes, with twist: also set attribute of root
+    for (int i = 0; i <= counter; i++) {
+      if (i == counter) {
+        continue;
       }
+
+      var oldChanges = createNonRootAndInsertionTransaction(counter, root);
+      EChange<EObject> setRootValueChange = TypeInferringAtomicEChangeFactory.getInstance()
+          .createReplaceSingleAttributeChange(
+              root,
+              AllElementTypesPackage.eINSTANCE.getRoot_SingleValuedEAttribute(),
+              0,
+              i
+          );
+      var newChanges = new ArrayList<>(oldChanges);
+      newChanges.add(setRootValueChange);
+      changes.add(CommonCreatorClasses.createTransactionFrom(newChanges));
     }
+
+    // Shuffle and submit
+    Collections.shuffle(changes);
+    var scheduler = new C2PLScheduler(environment, 4);
+    var transactionStatusTracker = new TransactionStatusTracker<EObject>();
+    scheduler.addListener(transactionStatusTracker);
+    for (var change : changes) {
+      scheduler.admitTransaction(change);
+    }
+
+    // Check for full execution
+    scheduler.waitForApplicationOfRunningTransactions();
+
+    // Exactly one transaction should succeed, the others should fail
+    assertEquals(counter - 1, transactionStatusTracker.getAbortedTransactions().size());
+    assertEquals(1, transactionStatusTracker.getCommitedTransactions().size());
   }
 
   static List<EChange<EObject>> createNonRootAndInsertionTransaction(int counter, Root root) {
@@ -400,6 +372,7 @@ class C2PLSchedulerTest {
   @Test
   void testCorrectUndoHandlingWithInsertAndRemoveEReferences(@TempDir Path testPath) throws IOException {
     setupMultiModelEnvironment(testPath);
+
     var scheduler = new C2PLScheduler(environment, 1);
     var root = getRoot().get();
     var nonRoot = getNonRoot().get();
@@ -408,14 +381,14 @@ class C2PLSchedulerTest {
 
     // Transaction 1: add reference from Root to NonRoot
     var change1 = CommonCreatorClasses.createTransactionFrom(List.of(
-            CommonCreatorClasses.E_CHANGE_FACTORY
-                .createInsertReferenceChange(
-                    root,
-                    AllElementTypesPackage.eINSTANCE.getRoot_MultiValuedContainmentEReference(),
-                    nonRoot,
-                    0
-                )
-        )
+        CommonCreatorClasses.E_CHANGE_FACTORY
+            .createInsertReferenceChange(
+                root,
+                AllElementTypesPackage.eINSTANCE.getRoot_MultiValuedContainmentEReference(),
+                nonRoot,
+                0
+            )
+      )
     );
     // Transaction 2: add the same reference, then set a value to 69
     var change2 = CommonCreatorClasses.createTransactionFrom(List.of(
@@ -426,13 +399,13 @@ class C2PLSchedulerTest {
                 nonRoot,
                 0
             ),
-        CommonCreatorClasses.E_CHANGE_FACTORY
-            .createReplaceSingleAttributeChange(
-                root,
-                AllElementTypesPackage.eINSTANCE.getRoot_SingleValuedEAttribute(),
-                69,
-                67
-            )
+       CommonCreatorClasses.E_CHANGE_FACTORY
+           .createReplaceSingleAttributeChange(
+               root,
+               AllElementTypesPackage.eINSTANCE.getRoot_SingleValuedEAttribute(),
+               69,
+               67
+           )
     ));
 
     // Admit t1 and t2

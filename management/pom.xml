@@ -86,12 +86,8 @@
         <dependency>
             <groupId>tools.vitruv.multimodelocl</groupId>
             <artifactId>multimodelocl-language</artifactId>
+            <version>1.0.0</version>
         </dependency>
-        <dependency>
-            <groupId>tools.vitruv.dsls</groupId>
-            <artifactId>vitruvOCL-language</artifactId>
-        </dependency>
-
     </dependencies>
 
     <!-- Test Management -->

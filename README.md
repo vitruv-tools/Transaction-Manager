@@ -27,7 +27,7 @@ This project depends on the following other projects from the Vitruvius framewor
 
 | **Name**     | **Description**                                             |
 |--------------|-------------------------------------------------------------|
-| management   | Main classes to management transactions.                    |
+| management   | Main classes to manage transactions.                    |
 | - scheduling | Definition of transaction execution threads and schedulers. |
 | - locking    | Lock management and locking schedulers.                     |
 

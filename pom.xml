@@ -21,14 +21,15 @@
   <description />
 
   <properties>
-    <vitruv.version>4.0.1-SNAPSHOT</vitruv.version>
-    <vitruv-dsls.version>4.0.1-SNAPSHOT</vitruv-dsls.version>
+    <vitruv.version>4.0.2-SNAPSHOT</vitruv.version>
+    <vitruv-dsls.version>4.0.2-SNAPSHOT</vitruv-dsls.version>
   </properties>
 
   <!-- Modules -->
   <modules>
     <module>management</module>
-    <module>Vitruv-Case-Study-Transactions</module>
+    <!-- Case Study is disabled for now -->
+    <!-- <module>Vitruv-Case-Study-Transactions</module>-->
   </modules>
 
   <build>
