@@ -43,3 +43,6 @@ plugin.properties
 
 # Xtext
 .antlr-generator-*-patch.jar
+
+# Claude
+CLAUDE*.md
