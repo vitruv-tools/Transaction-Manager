@@ -143,7 +143,7 @@ class C2PLSchedulerTest {
             ViewTypeFactory.createIdentityMappingViewType("Root")
         )
         .getSelectableElements()
-        .stream().filter(Root.class::isInstance)
+        .stream().filter(NonRoot.class::isInstance)
         .map(e -> (NonRoot) e)
         .findFirst();
   }

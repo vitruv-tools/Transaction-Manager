@@ -9,6 +9,10 @@ on:
     branches:
     - main
 
+# Heap size
+env:
+  MAVEN_OPTS: -Xmx4096m
+
 jobs:
   verify:
     name: Verify build on ${{ matrix.os }}
@@ -23,6 +27,7 @@ jobs:
       uses: actions/checkout@v6.0.2
       with:
         submodules: true
+
 
     - name: Setup Java and Maven cache
       uses: actions/setup-java@v5.2.0
