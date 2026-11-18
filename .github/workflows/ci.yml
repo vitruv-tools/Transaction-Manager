@@ -9,6 +9,10 @@ on:
     branches:
     - main
 
+# Heap size
+env:
+  MAVEN_OPTS: -Xmx4096m
+
 jobs:
   verify:
     name: Verify build on ${{ matrix.os }}
@@ -24,11 +28,12 @@ jobs:
       with:
         submodules: true
 
+
     - name: Setup Java and Maven cache
       uses: actions/setup-java@v5.2.0
       with:
         distribution: 'temurin'
-        java-version: '17'
+        java-version: '21'
         check-latest: true
         cache: 'maven'
 

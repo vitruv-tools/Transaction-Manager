@@ -3,12 +3,12 @@ package tools.vitruv.transactions.management.scheduling;
 import static com.google.common.base.Preconditions.checkState;
 import static tools.vitruv.change.atomic.command.internal.ChangeCommandUtil.alreadyContainsObject;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.eclipse.emf.ecore.EObject;
 import tools.vitruv.change.atomic.EChange;
@@ -22,7 +22,8 @@ import tools.vitruv.change.atomic.resolve.AtomicEChangeResolverHelper;
 import tools.vitruv.change.atomic.uuid.AtomicEChangeUuidResolver;
 import tools.vitruv.change.atomic.uuid.Uuid;
 import tools.vitruv.change.atomic.uuid.UuidResolver;
-import tools.vitruv.dsls.vitruvocl.pipeline.VitruvOCL;
+import tools.vitruv.multimodelocl.pipeline.BatchValidationResult;
+import tools.vitruv.multimodelocl.pipeline.MultiModelOCLInterface;
 import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
 import tools.vitruv.transactions.management.InverseEChangeComputer;
 import tools.vitruv.transactions.management.TransactionState;
@@ -86,7 +87,7 @@ public abstract class VitruviusTransactionExecutorThread
    * @param transactionState {@link TransactionState}
    * @param multiModelEnvironment {@link InternalVirtualModel}
    */
-  public VitruviusTransactionExecutorThread(
+  protected VitruviusTransactionExecutorThread(
       TransactionState<EObject> transactionState,
       ConcurrentLinkedDeque<SchedulingEventObserver<EObject>> observers,
       InternalVirtualModel multiModelEnvironment,
@@ -127,7 +128,7 @@ public abstract class VitruviusTransactionExecutorThread
               throw new IllegalArgumentException(
                       String.format("Failed to assign a Uuid to %s", eObject));
             },
-            (resource) -> baseUuidResolver.getResource(resource.getURI())
+        resource -> baseUuidResolver.getResource(resource.getURI())
     );
   }
 
@@ -183,7 +184,7 @@ public abstract class VitruviusTransactionExecutorThread
     constraintCheckingLock.readLock().lock();
     try {
       var unresolvedInverseChange = assignUuidToEChange(eChangeInverse);
-      if (hasHadEffect.get(eChangeToInvert)) {
+      if (Boolean.TRUE.equals(hasHadEffect.get(eChangeToInvert))) {
         ApplyEChangeSwitch.applyEChange(eChangeToInvert, true);
         updateEObjectToUUIDMapping(eChangeInverse, unresolvedInverseChange);
       }
@@ -276,19 +277,29 @@ public abstract class VitruviusTransactionExecutorThread
    *     transaction the same way as for a failed operation
    */
   protected void checkConsistency() {
-    VitruvOCL.registerVSUM(multiModelEnvironment);
     if (constraintsFile.isEmpty()) {
       return;
     }
     constraintCheckingLock.writeLock().lock();
-    var result = VitruvOCL.evaluateConstraints(constraintsFile.get());
-    constraintCheckingLock.writeLock().unlock();
-    if (!result.allSatisfied()) {
-      throw new IllegalStateException(
-          "Consistency check failed for transaction "
-              + transactionState
-              + ":\n"
-              + result.getDetailedReport());
+    try {
+      BatchValidationResult result = MultiModelOCLInterface.evaluateProject(
+          multiModelEnvironment.getFolder(),
+          constraintsFile.get()
+      );
+
+      if (!result.allSatisfied()) {
+        throw new IllegalStateException(
+            "Consistency check failed for transaction "
+                + transactionState
+                + ":\n"
+                + result.getDetailedReport());
+      }
+    } catch (IOException e) {
+      throw new RuntimeException(
+          "Failed to evaluate constraints due to an internal error: "
+          + e);
+    } finally {
+      constraintCheckingLock.writeLock().unlock();
     }
   }
 }
