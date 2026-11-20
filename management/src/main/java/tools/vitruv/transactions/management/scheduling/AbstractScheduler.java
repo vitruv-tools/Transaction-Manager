@@ -25,7 +25,7 @@ import tools.vitruv.framework.vsum.internal.InternalVirtualModel;
 import tools.vitruv.transactions.management.TransactionState;
 import tools.vitruv.transactions.management.TransactionStatus;
 import tools.vitruv.transactions.management.locking.C2PLThread;
-import tools.vitruv.transactions.management.locking.LockManager;
+import tools.vitruv.transactions.management.locking.C2PLLockManager;
 
 /**
  * An abstract scheduler that holds an {@link InternalVirtualModel}, and is able to create
@@ -86,7 +86,7 @@ public abstract class AbstractScheduler<E, T extends TransactionExecutorThread<E
   /**
    * Lock manager used to determine if lock requests can be granted.
    */
-  protected final LockManager<E> lockManager = new LockManager<>();
+  protected final C2PLLockManager<E> lockManager = new C2PLLockManager<>();
   /**
    * An additional lock to use for checking consistency upon commit.
    */

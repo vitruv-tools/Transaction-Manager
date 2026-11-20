@@ -77,26 +77,6 @@ public class TransactionLockingData<E> {
   }
 
   /**
-   * Replaces the transactions this transaction waits for (strict 2PL: a transaction waits for
-   * exactly one lock request at a time, so earlier wait-for edges are obsolete).
-   *
-   * @param otherTransactions - {@link Collection}
-   */
-  synchronized void waitOnlyFor(Collection<TransactionState<E>> otherTransactions) {
-    waitsFor.clear();
-    waitsFor.addAll(otherTransactions);
-  }
-
-  /**
-   * A copy of the transactions this transaction currently waits for.
-   *
-   * @return {@link Set}
-   */
-  synchronized Set<TransactionState<E>> waitsForSnapshot() {
-    return Set.copyOf(waitsFor);
-  }
-
-  /**
    * Unblocks this transaction for {@code unlockingTransaction}.
    *
    * @param unlockingTransactionState - {@link TransactionState}

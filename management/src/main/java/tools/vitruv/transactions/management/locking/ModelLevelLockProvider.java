@@ -11,12 +11,16 @@ import tools.vitruv.change.atomic.root.InsertRootEObject;
 import tools.vitruv.change.atomic.root.RemoveRootEObject;
 
 /**
- * Utility class that computes lists of {@link Lock}s that an operation/{@link EChange}
- * must acquire to be admitted.
+ * Computes the model-level {@link Lock}s that an operation/{@link EChange} must acquire to be
+ * admitted: locks on the elements and features the change itself touches.
+ *
+ * @param <E> - The Element type.
  */
-
-public final class LockComputer {
-  private LockComputer() {}
+public final class ModelLevelLockProvider<E> implements LockProvider<E> {
+  @Override
+  public List<Lock<E>> locksFor(EChange<E> change) {
+    return computeLocksFor(change);
+  }
 
   /**
    * Computes the required {@link Lock}s that an {@link EChange} requires.
