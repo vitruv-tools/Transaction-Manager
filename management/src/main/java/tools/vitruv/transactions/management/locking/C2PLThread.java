@@ -23,7 +23,7 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
   private static final Logger LOGGER = LogManager.getLogger(C2PLThread.class);
 
   /** The lock manager to consult for acquiring/releasing locks. */
-  private final LockManager<EObject> lockManager;
+  private final C2PLLockManager<EObject> lockManager;
 
   /**
    * Creates a new {@link C2PLThread} for {@code transactionState} on {@code multiModelEnvironment}
@@ -38,7 +38,7 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
       TransactionState<EObject> transactionState,
       ConcurrentLinkedDeque<SchedulingEventObserver<EObject>> observers,
       InternalVirtualModel virtualModel,
-      LockManager<EObject> lockManager,
+      C2PLLockManager<EObject> lockManager,
       ReentrantReadWriteLock consistencyCheckingLock) {
     this(transactionState, observers, virtualModel, lockManager, Optional.empty(), consistencyCheckingLock);
   }
@@ -58,7 +58,7 @@ public class C2PLThread extends VitruviusTransactionExecutorThread {
       TransactionState<EObject> transactionState,
       ConcurrentLinkedDeque<SchedulingEventObserver<EObject>> observers,
       InternalVirtualModel virtualModel,
-      LockManager<EObject> lockManager,
+      C2PLLockManager<EObject> lockManager,
       Optional<Path> constraintsFile,
       ReentrantReadWriteLock consistencyCheckingLock) {
     super(transactionState, observers, virtualModel, constraintsFile, consistencyCheckingLock);

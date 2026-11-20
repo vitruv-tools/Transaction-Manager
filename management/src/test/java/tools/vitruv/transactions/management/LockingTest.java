@@ -46,9 +46,13 @@ import tools.vitruv.change.testutils.metamodels.AllElementTypesCreators;
 import tools.vitruv.transactions.management.locking.ElementLock;
 import tools.vitruv.transactions.management.locking.FeatureLock;
 import tools.vitruv.transactions.management.locking.Lock;
-import tools.vitruv.transactions.management.locking.LockComputer;
+import tools.vitruv.transactions.management.locking.ModelLevelLockProvider;
+import tools.vitruv.transactions.management.locking.C2PLLockManager;
 import tools.vitruv.transactions.management.locking.LockManager;
 import tools.vitruv.transactions.management.locking.LockMode;
+import tools.vitruv.transactions.management.locking.MetamodelLevelLock;
+import tools.vitruv.transactions.management.locking.MetamodelLevelLockProvider;
+import tools.vitruv.transactions.management.locking.S2PLLockManager;
 import tools.vitruv.transactions.management.locking.TransactionLockingData;
 
 /**
@@ -57,11 +61,11 @@ import tools.vitruv.transactions.management.locking.TransactionLockingData;
 public class LockingTest {
 
   private static final Random random = new Random();
-  private LockManager<EObject> lockManager;
+  private C2PLLockManager<EObject> lockManager;
 
   @BeforeEach
   void setup() {
-    lockManager = new LockManager<>();
+    lockManager = new C2PLLockManager<>();
   }
 
   /**
@@ -72,7 +76,7 @@ public class LockingTest {
   void testCorrectComputationOfLocks() {
     // CreateEChange
     var createRootChange = CommonCreatorClasses.getCreateRootEObjectChange();
-    var locksForCreateRootChange = LockComputer.computeLocksFor(createRootChange);
+    var locksForCreateRootChange = ModelLevelLockProvider.computeLocksFor(createRootChange);
     assertEquals(1, locksForCreateRootChange.size());
     var createLock = (ElementLock<EObject>) locksForCreateRootChange.get(0);
     assertEquals(CommonCreatorClasses.ROOT, createLock.getRoot());
@@ -81,7 +85,7 @@ public class LockingTest {
     // DeleteEChange
     var deleteRootChange = CommonCreatorClasses
             .getDeleteRootEObjectChange(CommonCreatorClasses.ROOT);
-    var locksForDeleteRootChange = LockComputer.computeLocksFor(deleteRootChange);
+    var locksForDeleteRootChange = ModelLevelLockProvider.computeLocksFor(deleteRootChange);
 
     assertEquals(1, locksForDeleteRootChange.size());
     var deleteLock = (ElementLock<EObject>) locksForDeleteRootChange.get(0);
@@ -91,7 +95,7 @@ public class LockingTest {
     // ReplaceEAttributeEChange
     var setRootEAttributeChange = CommonCreatorClasses
             .getRootIntegerReplaceSingleValuedEAttributeChange(CommonCreatorClasses.ROOT);
-    var locksForReplaceAttributeChange = LockComputer.computeLocksFor(setRootEAttributeChange);
+    var locksForReplaceAttributeChange = ModelLevelLockProvider.computeLocksFor(setRootEAttributeChange);
     assertEquals(2, locksForReplaceAttributeChange.size());
     var lockOnRoot = (ElementLock<EObject>) locksForReplaceAttributeChange.get(0);
     assertEquals(CommonCreatorClasses.ROOT, lockOnRoot.getRoot());
@@ -104,7 +108,7 @@ public class LockingTest {
     // InsertReferenceEChange
     var insertRootEReferenceChange = CommonCreatorClasses.getIdentifiedInsertReferenceChange();
 
-    var locksForInsertReferenceChange = LockComputer.computeLocksFor(insertRootEReferenceChange);
+    var locksForInsertReferenceChange = ModelLevelLockProvider.computeLocksFor(insertRootEReferenceChange);
     assertEquals(3, locksForInsertReferenceChange.size());
     var lockOnRootInsert = (ElementLock<EObject>) locksForInsertReferenceChange.get(0);
     assertEquals(CommonCreatorClasses.ROOT, lockOnRootInsert.getRoot());
@@ -121,7 +125,7 @@ public class LockingTest {
     // RemoveReferenceEChange
     var removeRootEReferenceChange = CommonCreatorClasses.getIdentifiedRemoveEReferenceChange();
 
-    var locksForRemoveReferenceChange = LockComputer.computeLocksFor(removeRootEReferenceChange);
+    var locksForRemoveReferenceChange = ModelLevelLockProvider.computeLocksFor(removeRootEReferenceChange);
     assertEquals(3, locksForRemoveReferenceChange.size());
     var lockOnRootRemove = (ElementLock<EObject>) locksForRemoveReferenceChange.get(0);
     assertEquals(CommonCreatorClasses.ROOT, lockOnRootRemove.getRoot());
@@ -317,7 +321,7 @@ public class LockingTest {
             CommonCreatorClasses.getDeleteRootEObjectChange(CommonCreatorClasses.ROOT)
     );
     var vitruviusChange = new TransactionalChangeImpl<>(changes);
-    var lockManager = new LockManager<EObject>();
+    var lockManager = new C2PLLockManager<EObject>();
 
     // Submit transaction
     var transaction = lockManager.submitTransaction(vitruviusChange);
@@ -525,7 +529,7 @@ public class LockingTest {
     // Assert Transaction 2 holds its requested locks
     assertEquals(
             lockManager.getLocksHeldBy(transaction2),
-            new HashSet<>(LockComputer.computeLocksFor(change2))
+            new HashSet<>(ModelLevelLockProvider.computeLocksFor(change2))
     );
   }
 
@@ -692,11 +696,11 @@ public class LockingTest {
   private static class LockRequestingRunnable implements Runnable {
     @Getter
     private final Set<Lock<EObject>> locks = new HashSet<>();
-    private final LockManager<EObject> manager;
+    private final C2PLLockManager<EObject> manager;
     @Getter
     private TransactionState<EObject> transactionState;
 
-    LockRequestingRunnable(LockManager<EObject> manager) {
+    LockRequestingRunnable(C2PLLockManager<EObject> manager) {
       this.manager = manager;
     }
 
@@ -919,5 +923,190 @@ public class LockingTest {
                 return true;
               }
             }));
+  }
+
+  // ------------------------------------------------------------------ lock modes
+
+  /** Compatibility, join and intention of the multi-granularity lock modes. */
+  @Test
+  void testCompatibilityMatrix() {
+    LockMode is = LockMode.INTENTION_SHARED;
+    LockMode ix = LockMode.SHARED_INTENSIONAL_EXCLUSIVE;
+    LockMode s = LockMode.SHARED;
+    LockMode six = LockMode.SHARED_WITH_INTENTION_EXCLUSIVE;
+    LockMode x = LockMode.EXCLUSIVE;
+    Map<LockMode, Set<LockMode>> compatible = Map.of(
+        is, Set.of(is, ix, s, six),
+        ix, Set.of(is, ix),
+        s, Set.of(is, s),
+        six, Set.of(is),
+        x, Set.of());
+    for (LockMode first : LockMode.values()) {
+      for (LockMode second : LockMode.values()) {
+        assertEquals(compatible.get(first).contains(second), first.isCompatibleWith(second),
+            first + " vs " + second);
+      }
+    }
+    assertEquals(six, LockMode.highestLockMode(ix, s));
+    assertEquals(six, LockMode.highestLockMode(s, six));
+    assertEquals(x, LockMode.highestLockMode(six, x));
+    assertEquals(s, LockMode.highestLockMode(is, s));
+    assertEquals(ix, LockMode.highestLockMode(ix, is));
+    assertEquals(ix, six.intention());
+    assertEquals(is, s.intention());
+    assertEquals(ix, x.intention());
+  }
+
+  /** Several readers may hold a lock; a writer is blocked by all of them. */
+  @Test
+  void testSharedReadersBlockWriter() throws InterruptedException {
+    var manager = new S2PLLockManager<EObject>();
+    var support = new S2PLTestSupport(manager, null);
+    var t1 = support.newTransaction();
+    var t2 = support.newTransaction();
+    var t3 = support.newTransaction();
+    var roots = MetamodelLevelLock.<EObject>onClass(AllElementTypesPackage.eINSTANCE.getRoot(),
+        LockMode.SHARED);
+    assertTrue(manager.testLock(roots, t1).isEmpty());
+    assertTrue(manager.testLock(roots, t2).isEmpty());
+    assertEquals(Set.of(t1, t2),
+        manager.testLock(roots.convert(LockMode.EXCLUSIVE), t3).orElseThrow());
+  }
+
+  /** A transaction upgrading its own lock is blocked only by other holders. */
+  @Test
+  void testUpgradeIsBlockedOnlyByOthers() throws InterruptedException {
+    var manager = new S2PLLockManager<EObject>();
+    var support = new S2PLTestSupport(manager, null);
+    var t1 = support.newTransaction();
+    var t2 = support.newTransaction();
+    var roots = MetamodelLevelLock.<EObject>onClass(AllElementTypesPackage.eINSTANCE.getRoot(),
+        LockMode.INTENTION_SHARED);
+    assertTrue(manager.testLock(roots, t1).isEmpty());
+    assertTrue(manager.testLock(roots, t2).isEmpty());
+    assertEquals(Set.of(t2), manager.testLock(roots.convert(LockMode.EXCLUSIVE), t1).orElseThrow());
+    // sole holder upgrades
+    manager.releaseAllLocks(t2, true);
+    assertTrue(manager.testLock(roots.convert(LockMode.EXCLUSIVE), t1).isEmpty());
+    assertEquals(Set.of(roots), manager.getLocksHeldBy(t1));
+    assertEquals(LockMode.EXCLUSIVE, manager.getLocksHeldBy(t1).iterator().next().getMode());
+  }
+
+  // ------------------------------------------------------------------ strict 2PL
+
+  /** A waiting request of the strict 2PL lock manager is granted when the holder ends. */
+  @Test
+  void testWaitingRequestIsGrantedAfterHolderEnds() throws Exception {
+    var manager = new S2PLLockManager<EObject>();
+    var executor = java.util.concurrent.Executors.newCachedThreadPool();
+    try {
+      var support = new S2PLTestSupport(manager, executor);
+      var t1 = support.newTransaction();
+      var t2 = support.newTransaction();
+      var element = new ElementLock<EObject>(CommonCreatorClasses.ROOT, LockMode.EXCLUSIVE);
+      manager.acquireLocks(t1, List.of(element));
+      var request = support.acquireInBackground(t2, List.of(element.convert(LockMode.SHARED)));
+      S2PLTestSupport.assertStillWaiting(request);
+      manager.endTransaction(t1, true);
+      S2PLTestSupport.assertCompletes(request);
+      assertEquals(Set.of(element), manager.getLocksHeldBy(t2));
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  // ------------------------------------------------------------------ metamodel-level locks
+
+  private static final MetamodelLevelLockProvider MODEL_LEVEL_ONLY =
+      new MetamodelLevelLockProvider(change -> List.of());
+
+  private static Map<String, LockMode> metamodelLevelLocks(List<Lock<EObject>> locks) {
+    Map<String, LockMode> result = new java.util.HashMap<>();
+    for (Lock<EObject> lock : locks) {
+      if (lock instanceof MetamodelLevelLock<EObject> node) {
+        result.put(node.getKind() + " " + node.getNode().getName(), lock.getMode());
+      }
+    }
+    return result;
+  }
+
+  /** Model-level locks imply intention locks on the metamodel-level nodes above them. */
+  @Test
+  void testModelLevelLocksImplyMetamodelLevelIntentions() {
+    EChange<EObject> change =
+        CommonCreatorClasses.getRootIntegerReplaceSingleValuedEAttributeChange(
+            CommonCreatorClasses.ROOT);
+    var nodes = metamodelLevelLocks(MODEL_LEVEL_ONLY.locksFor(change));
+    var ix = LockMode.SHARED_INTENSIONAL_EXCLUSIVE;
+    assertEquals(ix, nodes.get("FEATURE "
+        + CommonCreatorClasses.ROOT_INTEGER_E_ATTRIBUTE.getName()));
+    assertEquals(ix, nodes.get("CLASS Root"));
+    assertEquals(ix, nodes.get("METAMODEL " + AllElementTypesPackage.eINSTANCE.getName()));
+    // reading all roots while writing one: the requests merge into SIX
+    var readAllRoots = new MetamodelLevelLockProvider(c -> List.of(
+        MetamodelLevelLock.onClass(AllElementTypesPackage.eINSTANCE.getRoot(), LockMode.SHARED)));
+    assertEquals(LockMode.SHARED_WITH_INTENTION_EXCLUSIVE,
+        metamodelLevelLocks(readAllRoots.locksFor(change)).get("CLASS Root"));
+  }
+
+  /**
+   * Writing a feature on all instances conflicts with writing it on one element, not with writing
+   * another feature.
+   */
+  @Test
+  void testMetamodelLevelWriteConflictsWithModelLevelWrite() throws Exception {
+    var manager = new S2PLLockManager<EObject>();
+    var executor = java.util.concurrent.Executors.newCachedThreadPool();
+    try {
+      var support = new S2PLTestSupport(manager, executor);
+      // t1's propagation writes the integer attribute of any root
+      var writer = new MetamodelLevelLockProvider(change -> List.of(MetamodelLevelLock.onFeature(
+          CommonCreatorClasses.ROOT_INTEGER_E_ATTRIBUTE, LockMode.EXCLUSIVE)));
+      var t1 = support.newTransaction();
+      var t2 = support.newTransaction();
+      var t3 = support.newTransaction();
+      manager.acquireLocks(t1,
+          writer.locksFor(CommonCreatorClasses.getIdentifiedInsertReferenceChange()));
+
+      // t2 changes that attribute of ROOT: waits for t1
+      var conflicting = support.acquireInBackground(t2, MODEL_LEVEL_ONLY.locksFor(
+          CommonCreatorClasses.getRootIntegerReplaceSingleValuedEAttributeChange(
+              CommonCreatorClasses.ROOT)));
+      S2PLTestSupport.assertStillWaiting(conflicting);
+
+      // t3 changes another attribute of ROOT: compatible
+      EChange<EObject> otherAttribute = CommonCreatorClasses.E_CHANGE_FACTORY
+          .createReplaceSingleAttributeChange((EObject) CommonCreatorClasses.ROOT,
+              CommonCreatorClasses.ROOT_INTEGER_E_ATTRIBUTE_2, 0, 1);
+      S2PLTestSupport.assertCompletes(
+          support.acquireInBackground(t3, MODEL_LEVEL_ONLY.locksFor(otherAttribute)));
+      support.awaitWaiting(t2);
+
+      manager.endTransaction(t1, true);
+      S2PLTestSupport.assertCompletes(conflicting);
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  /** Reading all instances of a class conflicts with writing one of them. */
+  @Test
+  void testMetamodelLevelReadOfAllInstancesConflictsWithModelLevelWrite() throws Exception {
+    var manager = new S2PLLockManager<EObject>();
+    var support = new S2PLTestSupport(manager, null);
+    var t1 = support.newTransaction();
+    var t2 = support.newTransaction();
+    var t3 = support.newTransaction();
+    manager.acquireLocks(t1, MODEL_LEVEL_ONLY.locksFor(
+        CommonCreatorClasses.getRootIntegerReplaceSingleValuedEAttributeChange(
+            CommonCreatorClasses.ROOT)));
+    // reading all roots (e.g. a reaction iterating over them) waits for the model-level write
+    var readAllRoots = MetamodelLevelLock.<EObject>onClass(
+        AllElementTypesPackage.eINSTANCE.getRoot(), LockMode.SHARED);
+    assertEquals(Set.of(t1), manager.testLock(readAllRoots, t2).orElseThrow());
+    manager.endTransaction(t1, true);
+    // two readers of all roots do not conflict
+    assertTrue(manager.testLock(readAllRoots, t2).isEmpty());
+    assertTrue(manager.testLock(readAllRoots, t3).isEmpty());
   }
 }
