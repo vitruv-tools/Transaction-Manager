@@ -11,12 +11,16 @@ import tools.vitruv.change.atomic.root.InsertRootEObject;
 import tools.vitruv.change.atomic.root.RemoveRootEObject;
 
 /**
- * Utility class that computes lists of {@link Lock}s that an operation/{@link EChange}
- * must acquire to be admitted.
+ * Computes the model-level {@link Lock}s that an operation/{@link EChange} must acquire to be
+ * admitted: locks on the elements and features the change itself touches.
+ *
+ * @param <E> - The Element type.
  */
-
-public final class LockComputer {
-  private LockComputer() {}
+public final class ModelLevelLockProvider<E> implements LockProvider<E> {
+  @Override
+  public List<Lock<E>> locksFor(EChange<E> change) {
+    return computeLocksFor(change);
+  }
 
   /**
    * Computes the required {@link Lock}s that an {@link EChange} requires.
@@ -37,21 +41,21 @@ public final class LockComputer {
     }
     if (change instanceof ReplaceSingleValuedEAttribute<E, ?> s) {
       return List.of(
-          new ElementLock<>(s.getAffectedElement(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
+          new ElementLock<>(s.getAffectedElement(), LockMode.INTENTION_EXCLUSIVE),
           new FeatureLock<>(s.getAffectedElement(), s.getAffectedFeature())
       );
     }
     if (change instanceof InsertEReference<E> a) {
       return List.of(
-          new ElementLock<>(a.getAffectedElement(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
-          new ElementLock<>(a.getNewValue(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
+          new ElementLock<>(a.getAffectedElement(), LockMode.INTENTION_EXCLUSIVE),
+          new ElementLock<>(a.getNewValue(), LockMode.INTENTION_EXCLUSIVE),
           new FeatureLock<>(a.getAffectedElement(), a.getAffectedFeature())
       );
     }
     if (change instanceof RemoveEReference<E> r) {
       return List.of(
-          new ElementLock<>(r.getAffectedElement(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
-          new ElementLock<>(r.getOldValue(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
+          new ElementLock<>(r.getAffectedElement(), LockMode.INTENTION_EXCLUSIVE),
+          new ElementLock<>(r.getOldValue(), LockMode.INTENTION_EXCLUSIVE),
           new FeatureLock<>(r.getAffectedElement(), r.getAffectedFeature())
       );
     }
