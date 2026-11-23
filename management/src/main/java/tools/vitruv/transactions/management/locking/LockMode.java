@@ -11,16 +11,11 @@ package tools.vitruv.transactions.management.locking;
  * <pre>
  *                                IS   IX   S    SIX  X
  *   INTENTION_SHARED (IS)        yes  yes  yes  yes  no
- *   SHARED_INTENSIONAL_EXCL.(IX) yes  yes  no   no   no
+ *   INTENTION_EXCLUSIVE (IX)     yes  yes  no   no   no
  *   SHARED (S)                   yes  no   yes  no   no
- *   SHARED_WITH_INTENTION_EXCL.  yes  no   no   no   no
+ *   SHARED_INTENTION_EXCL. (SIX) yes  no   no   no   no
  *   EXCLUSIVE (X)                no   no   no   no   no
  * </pre>
- *
- * <p>{@link #SHARED_INTENSIONAL_EXCLUSIVE} keeps its original semantics: it may be held by several
- * transactions at once and announces exclusive locks below, i.e. it behaves like the classic
- * intention-exclusive (IX) mode. The classic SIX mode (shared, plus exclusive locks below) is
- * {@link #SHARED_WITH_INTENTION_EXCLUSIVE}.
  */
 public enum LockMode {
   /**
@@ -28,11 +23,11 @@ public enum LockMode {
    */
   INTENTION_SHARED(),
   /**
-   * SHARED_INTENSIONAL_EXCLUSIVE:
+   * Intention exclusive (formerly SHARED_INTENSIONAL_EXCLUSIVE):
    * The locked element can be locked by multiple transactions,
    * but for at least one of its children, there is an EXCLUSIVE lock.
    */
-  SHARED_INTENSIONAL_EXCLUSIVE(),
+  INTENTION_EXCLUSIVE(),
   /**
    * Shared: may be held by several readers at once.
    */
@@ -41,7 +36,7 @@ public enum LockMode {
    * Shared, and exclusive locks on finer-grained nodes below (classic SIX): e.g. reading all
    * instances of a class while writing a feature of some of them.
    */
-  SHARED_WITH_INTENTION_EXCLUSIVE(),
+  SHARED_INTENTION_EXCLUSIVE(),
   /**
    * Exclusive:
    * This lock can only be held by one transaction.
@@ -62,10 +57,10 @@ public enum LockMode {
     if (this == INTENTION_SHARED || other == INTENTION_SHARED) {
       return true;
     }
-    if (this == SHARED_WITH_INTENTION_EXCLUSIVE || other == SHARED_WITH_INTENTION_EXCLUSIVE) {
+    if (this == SHARED_INTENTION_EXCLUSIVE || other == SHARED_INTENTION_EXCLUSIVE) {
       return false;
     }
-    // remaining: SHARED_INTENSIONAL_EXCLUSIVE and SHARED
+    // remaining: INTENTION_EXCLUSIVE and SHARED
     return this == other;
   }
 
@@ -76,7 +71,7 @@ public enum LockMode {
    */
   public LockMode intention() {
     return this == SHARED || this == INTENTION_SHARED
-        ? INTENTION_SHARED : SHARED_INTENSIONAL_EXCLUSIVE;
+        ? INTENTION_SHARED : INTENTION_EXCLUSIVE;
   }
 
   /**
@@ -96,7 +91,7 @@ public enum LockMode {
     if (l1 == EXCLUSIVE || l2 == EXCLUSIVE) {
       return EXCLUSIVE;
     }
-    // two different ones of SHARED_INTENSIONAL_EXCLUSIVE, SHARED, SHARED_WITH_INTENTION_EXCLUSIVE
-    return SHARED_WITH_INTENTION_EXCLUSIVE;
+    // two different ones of INTENTION_EXCLUSIVE, SHARED, SHARED_INTENTION_EXCLUSIVE
+    return SHARED_INTENTION_EXCLUSIVE;
   }
 }

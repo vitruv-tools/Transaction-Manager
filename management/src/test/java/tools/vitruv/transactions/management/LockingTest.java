@@ -99,7 +99,7 @@ public class LockingTest {
     assertEquals(2, locksForReplaceAttributeChange.size());
     var lockOnRoot = (ElementLock<EObject>) locksForReplaceAttributeChange.get(0);
     assertEquals(CommonCreatorClasses.ROOT, lockOnRoot.getRoot());
-    assertEquals(LockMode.SHARED_INTENSIONAL_EXCLUSIVE, lockOnRoot.getMode());
+    assertEquals(LockMode.INTENTION_EXCLUSIVE, lockOnRoot.getMode());
     var lockOnAttribute = (FeatureLock<EObject>) locksForReplaceAttributeChange.get(1);
     assertEquals(CommonCreatorClasses.ROOT, lockOnAttribute.getRoot());
     assertEquals(LockMode.EXCLUSIVE, lockOnAttribute.getMode());
@@ -112,10 +112,10 @@ public class LockingTest {
     assertEquals(3, locksForInsertReferenceChange.size());
     var lockOnRootInsert = (ElementLock<EObject>) locksForInsertReferenceChange.get(0);
     assertEquals(CommonCreatorClasses.ROOT, lockOnRootInsert.getRoot());
-    assertEquals(LockMode.SHARED_INTENSIONAL_EXCLUSIVE, lockOnRootInsert.getMode());
+    assertEquals(LockMode.INTENTION_EXCLUSIVE, lockOnRootInsert.getMode());
     var lockOnNonRootInsert = (ElementLock<EObject>) locksForInsertReferenceChange.get(1);
     assertEquals(CommonCreatorClasses.NON_ROOT, lockOnNonRootInsert.getRoot());
-    assertEquals(LockMode.SHARED_INTENSIONAL_EXCLUSIVE, lockOnNonRootInsert.getMode());
+    assertEquals(LockMode.INTENTION_EXCLUSIVE, lockOnNonRootInsert.getMode());
     var lockOnReferenceInsert = (FeatureLock<EObject>) locksForInsertReferenceChange.get(2);
     assertEquals(CommonCreatorClasses.ROOT, lockOnReferenceInsert.getRoot());
     assertEquals(LockMode.EXCLUSIVE, lockOnReferenceInsert.getMode());
@@ -129,10 +129,10 @@ public class LockingTest {
     assertEquals(3, locksForRemoveReferenceChange.size());
     var lockOnRootRemove = (ElementLock<EObject>) locksForRemoveReferenceChange.get(0);
     assertEquals(CommonCreatorClasses.ROOT, lockOnRootRemove.getRoot());
-    assertEquals(LockMode.SHARED_INTENSIONAL_EXCLUSIVE, lockOnRootRemove.getMode());
+    assertEquals(LockMode.INTENTION_EXCLUSIVE, lockOnRootRemove.getMode());
     var lockOnNonRootRemove = (ElementLock<EObject>) locksForRemoveReferenceChange.get(1);
     assertEquals(CommonCreatorClasses.NON_ROOT, lockOnNonRootRemove.getRoot());
-    assertEquals(LockMode.SHARED_INTENSIONAL_EXCLUSIVE, lockOnNonRootRemove.getMode());
+    assertEquals(LockMode.INTENTION_EXCLUSIVE, lockOnNonRootRemove.getMode());
     var lockOnReferenceRemove = (FeatureLock<EObject>) locksForRemoveReferenceChange.get(2);
     assertEquals(CommonCreatorClasses.ROOT, lockOnReferenceRemove.getRoot());
     assertEquals(LockMode.EXCLUSIVE, lockOnReferenceRemove.getMode());
@@ -340,7 +340,7 @@ public class LockingTest {
     var locksHeldByTransaction = lockManager.getLocksHeldBy(transaction);
     assertLock(locksHeldByTransaction, CommonCreatorClasses.ROOT, LockMode.EXCLUSIVE, null);
     assertLock(locksHeldByTransaction, CommonCreatorClasses.NON_ROOT,
-            LockMode.SHARED_INTENSIONAL_EXCLUSIVE, null);
+            LockMode.INTENTION_EXCLUSIVE, null);
     assertLock(locksHeldByTransaction, CommonCreatorClasses.ROOT,
             LockMode.EXCLUSIVE, CommonCreatorClasses.ROOT_INTEGER_E_ATTRIBUTE);
     assertLock(locksHeldByTransaction, CommonCreatorClasses.ROOT,
@@ -473,7 +473,7 @@ public class LockingTest {
     var locksOfT2 = lockManager.getLocksHeldBy(transaction2);
     assertEquals(2, locksOfT2.size());
     assertLock(locksOfT2,
-            CommonCreatorClasses.ROOT, LockMode.SHARED_INTENSIONAL_EXCLUSIVE, null);
+            CommonCreatorClasses.ROOT, LockMode.INTENTION_EXCLUSIVE, null);
     assertLock(locksOfT2,
             CommonCreatorClasses.ROOT,
             LockMode.EXCLUSIVE,
@@ -557,7 +557,7 @@ public class LockingTest {
 
     assertEquals(2, locks.size());
     assertLock(locks,
-            CommonCreatorClasses.ROOT, LockMode.SHARED_INTENSIONAL_EXCLUSIVE, null);
+            CommonCreatorClasses.ROOT, LockMode.INTENTION_EXCLUSIVE, null);
     assertLock(locks,
             CommonCreatorClasses.ROOT,
             LockMode.EXCLUSIVE,
@@ -738,14 +738,14 @@ public class LockingTest {
   @Test
   void testLockModeBehavior() {
     var lockModeX = LockMode.EXCLUSIVE;
-    var lockModeSIX = LockMode.SHARED_INTENSIONAL_EXCLUSIVE;
-    assertTrue(lockModeX.compareTo(lockModeSIX) > 0);
-    assertTrue(lockModeSIX.compareTo(lockModeX) < 0);
+    var lockModeIX = LockMode.INTENTION_EXCLUSIVE;
+    assertTrue(lockModeX.compareTo(lockModeIX) > 0);
+    assertTrue(lockModeIX.compareTo(lockModeX) < 0);
 
     assertEquals(lockModeX, LockMode.highestLockMode(lockModeX, lockModeX));
-    assertEquals(lockModeX, LockMode.highestLockMode(lockModeX, lockModeSIX));
-    assertEquals(lockModeX, LockMode.highestLockMode(lockModeSIX, lockModeX));
-    assertEquals(lockModeSIX, LockMode.highestLockMode(lockModeSIX, lockModeSIX));
+    assertEquals(lockModeX, LockMode.highestLockMode(lockModeX, lockModeIX));
+    assertEquals(lockModeX, LockMode.highestLockMode(lockModeIX, lockModeX));
+    assertEquals(lockModeIX, LockMode.highestLockMode(lockModeIX, lockModeIX));
   }
 
   /**
@@ -931,9 +931,9 @@ public class LockingTest {
   @Test
   void testCompatibilityMatrix() {
     LockMode is = LockMode.INTENTION_SHARED;
-    LockMode ix = LockMode.SHARED_INTENSIONAL_EXCLUSIVE;
+    LockMode ix = LockMode.INTENTION_EXCLUSIVE;
     LockMode s = LockMode.SHARED;
-    LockMode six = LockMode.SHARED_WITH_INTENTION_EXCLUSIVE;
+    LockMode six = LockMode.SHARED_INTENTION_EXCLUSIVE;
     LockMode x = LockMode.EXCLUSIVE;
     Map<LockMode, Set<LockMode>> compatible = Map.of(
         is, Set.of(is, ix, s, six),
@@ -1037,7 +1037,7 @@ public class LockingTest {
         CommonCreatorClasses.getRootIntegerReplaceSingleValuedEAttributeChange(
             CommonCreatorClasses.ROOT);
     var nodes = metamodelLevelLocks(MODEL_LEVEL_ONLY.locksFor(change));
-    var ix = LockMode.SHARED_INTENSIONAL_EXCLUSIVE;
+    var ix = LockMode.INTENTION_EXCLUSIVE;
     assertEquals(ix, nodes.get("FEATURE "
         + CommonCreatorClasses.ROOT_INTEGER_E_ATTRIBUTE.getName()));
     assertEquals(ix, nodes.get("CLASS Root"));
@@ -1045,7 +1045,7 @@ public class LockingTest {
     // reading all roots while writing one: the requests merge into SIX
     var readAllRoots = new MetamodelLevelLockProvider(c -> List.of(
         MetamodelLevelLock.onClass(AllElementTypesPackage.eINSTANCE.getRoot(), LockMode.SHARED)));
-    assertEquals(LockMode.SHARED_WITH_INTENTION_EXCLUSIVE,
+    assertEquals(LockMode.SHARED_INTENTION_EXCLUSIVE,
         metamodelLevelLocks(readAllRoots.locksFor(change)).get("CLASS Root"));
   }
 

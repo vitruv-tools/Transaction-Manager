@@ -20,7 +20,7 @@ import org.eclipse.emf.ecore.EStructuralFeature;
  *
  * <p>A lock below takes the intention mode on the nodes above it (see
  * {@link MetamodelLevelLockProvider}): e.g. writing a feature of one element takes
- * {@link LockMode#SHARED_INTENSIONAL_EXCLUSIVE} on the feature node, the element's class and the
+ * {@link LockMode#INTENTION_EXCLUSIVE} on the feature node, the element's class and the
  * metamodel, so that a transaction that reads that feature on all instances
  * ({@link LockMode#SHARED} on the feature node) conflicts with it, while one that reads another
  * feature does not.

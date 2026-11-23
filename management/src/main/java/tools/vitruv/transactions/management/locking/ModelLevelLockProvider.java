@@ -41,21 +41,21 @@ public final class ModelLevelLockProvider<E> implements LockProvider<E> {
     }
     if (change instanceof ReplaceSingleValuedEAttribute<E, ?> s) {
       return List.of(
-          new ElementLock<>(s.getAffectedElement(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
+          new ElementLock<>(s.getAffectedElement(), LockMode.INTENTION_EXCLUSIVE),
           new FeatureLock<>(s.getAffectedElement(), s.getAffectedFeature())
       );
     }
     if (change instanceof InsertEReference<E> a) {
       return List.of(
-          new ElementLock<>(a.getAffectedElement(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
-          new ElementLock<>(a.getNewValue(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
+          new ElementLock<>(a.getAffectedElement(), LockMode.INTENTION_EXCLUSIVE),
+          new ElementLock<>(a.getNewValue(), LockMode.INTENTION_EXCLUSIVE),
           new FeatureLock<>(a.getAffectedElement(), a.getAffectedFeature())
       );
     }
     if (change instanceof RemoveEReference<E> r) {
       return List.of(
-          new ElementLock<>(r.getAffectedElement(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
-          new ElementLock<>(r.getOldValue(), LockMode.SHARED_INTENSIONAL_EXCLUSIVE),
+          new ElementLock<>(r.getAffectedElement(), LockMode.INTENTION_EXCLUSIVE),
+          new ElementLock<>(r.getOldValue(), LockMode.INTENTION_EXCLUSIVE),
           new FeatureLock<>(r.getAffectedElement(), r.getAffectedFeature())
       );
     }
